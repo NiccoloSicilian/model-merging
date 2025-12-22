@@ -1,4 +1,4 @@
-_target_: model_merging.merger.isotropic_merger.IsotropicMerger
+_target_: model_merging.merger.isotropic.IsotropicMerger
 
 optimal_alphas:
   ViT-B-32:
