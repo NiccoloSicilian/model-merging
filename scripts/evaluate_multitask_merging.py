@@ -86,7 +86,8 @@ def run(cfg: DictConfig) -> str:
     """
 
     seed_index_everything(cfg)
-
+    print("MERGERERERE: ",cfg.merger)
+    
     logger, template_core = boilerplate(cfg)
 
     num_tasks = len(cfg.benchmark.datasets)
@@ -117,7 +118,6 @@ def run(cfg: DictConfig) -> str:
     pylogger.info(f"Finetuned models: {list(finetuned_models.keys())}")
 
     merger = instantiate(cfg.merger)
-    print(cfg.merger)
     merged_encoder = merger.merge(zeroshot_encoder, finetuned_models)
 
     logger.log_configuration(merged_encoder, cfg)
