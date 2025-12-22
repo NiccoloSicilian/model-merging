@@ -266,7 +266,7 @@ def get_svd_dict(
     compression_ratio = 1 / compression_factor
     pylogger.info(f"Using compression ratio: {compression_ratio:.4f}")
 
-    svd_path = Path(svd_path) + f"_compress_{compression_factor}.pt"
+    svd_path = Path(str(svd_path) + f"_compress_{compression_factor}.pt")
 
     if svd_path is not None and Path(svd_path).exists():
         pylogger.info(f"Loading precomputed SVD dictionary from: {svd_path}")
