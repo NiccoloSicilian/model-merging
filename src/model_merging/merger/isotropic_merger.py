@@ -23,12 +23,12 @@ from pathlib import Path
 # from ... import TaskVectorBasedMerger, compute_task_dict, get_svd_dict, isotropic_sum, apply_dict_to_model
 class IsotropicMerger(TaskVectorBasedMerger):
 
-    def __init__(self, optimal_alphas, svd_path, svd_compress_factor, device=None):
+    def __init__(self, optimal_alphas, svd_path, svd_compress_factor,model_name, device=None):
         super().__init__()
         self.optimal_alphas = optimal_alphas
         self.svd_path = svd_path
         self.svd_compress_factor = svd_compress_factor
-        
+        self.model_name = model_name
         # IGNORE the 'device' argument passed by Hydra.
         # Auto-detect: Use GPU if available, else CPU.
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -75,7 +75,7 @@ class IsotropicMerger(TaskVectorBasedMerger):
             svd_dict=svd_dict,
         )
 
-        model_name = self.cfg.nn.module.encoder.model_name
+        model_name = self.model_name
         coefficient = 1.0 
 
         if (
