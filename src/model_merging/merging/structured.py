@@ -28,9 +28,53 @@ from typing import Tuple
 pylogger = logging.getLogger(__name__)
 @torch.no_grad()
 def avg_layers(ref_state_dict, svd_dict, device="cuda"):
-    for key in aggregated_model_dict:
-          tvs = [task_vector.vector[key].to(device) for task_vector in task_vectors]
-          new_vector[key] = sum(tvs) / len(tvs)
+    """
+    Computes the arithmetic mean of task vectors from their SVD-compressed representations.
+    
+    Equivalent to: result = sum(task_vectors) / num_tasks
+    """
+    aggregated_vector = {}
+    
+    # We iterate over the keys found in the SVD dictionary to ensure we only 
+    # process layers that actually have task vectors.
+    # (Using datasets[0] as a reference for keys)
+    datasets = list(svd_dict.keys())
+    reference_keys = list(svd_dict[datasets[0]].keys())
+    num_datasets = len(datasets)
+
+    for layer_name in tqdm(reference_keys, desc="Averaging SVD Task Vectors"):
+        
+        # Accumulate the sum of this layer across all datasets
+        layer_sum = 0
+        
+        # Check dimensionality based on the first dataset's entry
+        # "dim1" exists for vectors (1D), while u,s,v exist for matrices (2D)
+        is_matrix = "u" in svd_dict[datasets[0]][layer_name]
+
+        for dataset in datasets:
+            
+            if is_matrix:
+                # 1. Reconstruct matrix: Delta = U @ S @ V.T
+                delta_layer_svd = svd_dict[dataset][layer_name]
+                
+                u = delta_layer_svd["u"].to(device)
+                s = delta_layer_svd["s"].to(device)
+                v = delta_layer_svd["v"].to(device)
+                
+                # torch.diag_embed turns the 1D singular values into a 2D diagonal matrix
+                delta = u @ torch.diag_embed(s) @ v
+                
+                layer_sum += delta
+                
+            else:
+                # 2. Reconstruct vector: Direct load
+                delta = svd_dict[dataset][layer_name]["dim1"].to(device)
+                layer_sum += delta
+
+        # 3. Compute Average: Sum / N
+        aggregated_vector[layer_name] = layer_sum / num_datasets
+
+    return aggregated_vector
         
 @torch.no_grad()
 def isotropic_sum(ref_state_dict, svd_dict, device="cuda"):
