@@ -26,8 +26,12 @@ from tqdm import tqdm
 from typing import Tuple
 
 pylogger = logging.getLogger(__name__)
-
-
+@torch.no_grad()
+def avg_layers(ref_state_dict, svd_dict, device="cuda"):
+    for key in aggregated_model_dict:
+          tvs = [task_vector.vector[key].to(device) for task_vector in task_vectors]
+          new_vector[key] = sum(tvs) / len(tvs)
+        
 @torch.no_grad()
 def isotropic_sum(ref_state_dict, svd_dict, device="cuda"):
     aggregated_model_dict = ref_state_dict
