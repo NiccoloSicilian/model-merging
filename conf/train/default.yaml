@@ -1,5 +1,5 @@
 seed_index: 0
-deterministic: False
+deterministic: True
 
 trainer:
   log_every_n_steps: 1
