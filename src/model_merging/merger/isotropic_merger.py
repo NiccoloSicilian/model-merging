@@ -7,7 +7,7 @@ from model_merging.utils.utils import (
     compute_task_dict,
     print_memory,
 )
-from model_merging.task_vectors.task_singular_vectors import (
+from model_merging.merging.structured import (
     get_svd_dict,
     isotropic_sum,
 )
