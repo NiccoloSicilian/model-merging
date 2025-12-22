@@ -21,7 +21,6 @@ from pathlib import Path
 
 # Keep your existing imports...
 # from ... import TaskVectorBasedMerger, compute_task_dict, get_svd_dict, isotropic_sum, apply_dict_to_model
-
 class IsotropicMerger(TaskVectorBasedMerger):
 
     def __init__(self, optimal_alphas, svd_path, svd_compress_factor, device=None):
@@ -30,12 +29,14 @@ class IsotropicMerger(TaskVectorBasedMerger):
         self.svd_path = svd_path
         self.svd_compress_factor = svd_compress_factor
         
-        # Default to CPU if no device is provided
-        self.device = device if device is not None else torch.device("cpu")
+        # IGNORE the 'device' argument passed by Hydra.
+        # Auto-detect: Use GPU if available, else CPU.
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"🚀 IsotropicMerger initialized on device: {self.device}")
 
     @torch.no_grad()
     def merge(self, base_model, finetuned_models):
-        # 1. Move base model to the correct device
+        # 1. Move base model to the auto-detected device
         base_model = base_model.to(self.device)
 
         task_dicts = {}
@@ -45,13 +46,11 @@ class IsotropicMerger(TaskVectorBasedMerger):
         num_tasks = len(datasets) 
 
         for dataset in datasets:
-            # --- THE FIX STARTS HERE ---
-            # finetuned_models[dataset] is a Dictionary, not a Model.
-            # We must move every tensor inside the dictionary manually.
+            # 2. Move the finetuned state_dict to device manually
+            # (finetuned_models[dataset] is an OrderedDict, not a Module)
             ft_state_dict = {
                 k: v.to(self.device) for k, v in finetuned_models[dataset].items()
             }
-            # --- THE FIX ENDS HERE ---
 
             task_dicts[dataset] = compute_task_dict(
                 base_model.state_dict(), ft_state_dict
@@ -64,8 +63,6 @@ class IsotropicMerger(TaskVectorBasedMerger):
             if self.device.type == "cuda":
                 torch.cuda.empty_cache()
 
-        # svd_dict expects CPU or GPU? Usually keeping SVD calc on GPU is faster,
-        # but if it crashes later, we might need to move things to CPU here.
         svd_dict = get_svd_dict(
             task_dicts, datasets, self.svd_path, self.svd_compress_factor
         )
