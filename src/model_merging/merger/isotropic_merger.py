@@ -15,6 +15,12 @@ from model_merging.merging.structured import (
 import torch
 
 pylogger = logging.getLogger(__name__)
+import torch
+import copy
+from pathlib import Path
+
+# Keep your existing imports...
+# from ... import TaskVectorBasedMerger, compute_task_dict, get_svd_dict, isotropic_sum, apply_dict_to_model
 
 class IsotropicMerger(TaskVectorBasedMerger):
 
@@ -24,43 +30,47 @@ class IsotropicMerger(TaskVectorBasedMerger):
         self.svd_path = svd_path
         self.svd_compress_factor = svd_compress_factor
         
-        # 1. Store the device (default to CPU if not provided)
+        # Default to CPU if no device is provided
         self.device = device if device is not None else torch.device("cpu")
 
     @torch.no_grad()
     def merge(self, base_model, finetuned_models):
-        # 2. Move base model to the correct device immediately
+        # 1. Move base model to the correct device
         base_model = base_model.to(self.device)
 
         task_dicts = {}
         datasets = list(finetuned_models.keys())
         
-        # BUG FIX: Calculate num_tasks BEFORE deleting items from the dictionary
+        # Calculate this BEFORE deleting items
         num_tasks = len(datasets) 
 
         for dataset in datasets:
-            # 3. Move the specific finetuned model to device just before use
-            # We assume finetuned_models[dataset] is a model object
-            ft_model = finetuned_models[dataset].to(self.device)
+            # --- THE FIX STARTS HERE ---
+            # finetuned_models[dataset] is a Dictionary, not a Model.
+            # We must move every tensor inside the dictionary manually.
+            ft_state_dict = {
+                k: v.to(self.device) for k, v in finetuned_models[dataset].items()
+            }
+            # --- THE FIX ENDS HERE ---
 
             task_dicts[dataset] = compute_task_dict(
-                base_model.state_dict(), ft_model
+                base_model.state_dict(), ft_state_dict
             )
             
             # Cleanup to save VRAM
             del finetuned_models[dataset] 
-            del ft_model # Explicitly delete the reference
+            del ft_state_dict 
             
             if self.device.type == "cuda":
                 torch.cuda.empty_cache()
 
-        # print_memory("after computing task dicts")
-
+        # svd_dict expects CPU or GPU? Usually keeping SVD calc on GPU is faster,
+        # but if it crashes later, we might need to move things to CPU here.
         svd_dict = get_svd_dict(
             task_dicts, datasets, self.svd_path, self.svd_compress_factor
         )
 
-        # Ensure the reference state dict is on the right device
+        # Ensure reference state dict is on the right device
         ref_state_dict = {k: v.to(self.device) for k, v in base_model.state_dict().items()}
 
         multi_task_vector = isotropic_sum(
@@ -69,8 +79,6 @@ class IsotropicMerger(TaskVectorBasedMerger):
         )
 
         model_name = self.cfg.nn.module.encoder.model_name
-
-        # Default coefficient in case the condition below is not met
         coefficient = 1.0 
 
         if (
@@ -79,7 +87,6 @@ class IsotropicMerger(TaskVectorBasedMerger):
         ):
             coefficient = self.optimal_alphas[model_name][num_tasks]
 
-        # base_model is already on self.device, so the copy will be too
         merged_encoder = copy.deepcopy(base_model)
 
         merged_encoder = apply_dict_to_model(
@@ -89,7 +96,6 @@ class IsotropicMerger(TaskVectorBasedMerger):
         )
 
         return merged_encoder
-
 class IsotropicCommonTaskSpecificMerger(TaskVectorBasedMerger):
     def __init__(
         self,
