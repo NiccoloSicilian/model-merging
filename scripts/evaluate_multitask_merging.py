@@ -117,7 +117,7 @@ def run(cfg: DictConfig) -> str:
     pylogger.info(f"Finetuned models: {list(finetuned_models.keys())}")
 
     merger = instantiate(cfg.merger)
-
+    print(cfg.merger)
     merged_encoder = merger.merge(zeroshot_encoder, finetuned_models)
 
     logger.log_configuration(merged_encoder, cfg)
