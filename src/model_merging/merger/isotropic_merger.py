@@ -16,44 +16,62 @@ import torch
 
 pylogger = logging.getLogger(__name__)
 
-
 class IsotropicMerger(TaskVectorBasedMerger):
 
-    def __init__(self, optimal_alphas, svd_path, svd_compress_factor, device = None):
+    def __init__(self, optimal_alphas, svd_path, svd_compress_factor, device=None):
         super().__init__()
-
         self.optimal_alphas = optimal_alphas
         self.svd_path = svd_path
         self.svd_compress_factor = svd_compress_factor
+        
+        # 1. Store the device (default to CPU if not provided)
+        self.device = device if device is not None else torch.device("cpu")
 
     @torch.no_grad()
     def merge(self, base_model, finetuned_models):
+        # 2. Move base model to the correct device immediately
+        base_model = base_model.to(self.device)
 
         task_dicts = {}
-
         datasets = list(finetuned_models.keys())
+        
+        # BUG FIX: Calculate num_tasks BEFORE deleting items from the dictionary
+        num_tasks = len(datasets) 
 
         for dataset in datasets:
-            task_dicts[dataset] = compute_task_dict(
-                base_model.state_dict(), finetuned_models[dataset]
-            )
-            del finetuned_models[dataset]  # Delete one model at a time
-            torch.cuda.empty_cache()
+            # 3. Move the specific finetuned model to device just before use
+            # We assume finetuned_models[dataset] is a model object
+            ft_model = finetuned_models[dataset].to(self.device)
 
-        print_memory("after computing task dicts")
+            task_dicts[dataset] = compute_task_dict(
+                base_model.state_dict(), ft_model
+            )
+            
+            # Cleanup to save VRAM
+            del finetuned_models[dataset] 
+            del ft_model # Explicitly delete the reference
+            
+            if self.device.type == "cuda":
+                torch.cuda.empty_cache()
+
+        # print_memory("after computing task dicts")
 
         svd_dict = get_svd_dict(
             task_dicts, datasets, self.svd_path, self.svd_compress_factor
         )
 
+        # Ensure the reference state dict is on the right device
+        ref_state_dict = {k: v.to(self.device) for k, v in base_model.state_dict().items()}
+
         multi_task_vector = isotropic_sum(
-            ref_state_dict=copy.deepcopy(base_model.state_dict()),
+            ref_state_dict=ref_state_dict,
             svd_dict=svd_dict,
         )
 
         model_name = self.cfg.nn.module.encoder.model_name
 
-        num_tasks = len(finetuned_models)
+        # Default coefficient in case the condition below is not met
+        coefficient = 1.0 
 
         if (
             model_name in self.optimal_alphas
@@ -61,7 +79,8 @@ class IsotropicMerger(TaskVectorBasedMerger):
         ):
             coefficient = self.optimal_alphas[model_name][num_tasks]
 
-        merged_encoder: ImageEncoder = copy.deepcopy(base_model)
+        # base_model is already on self.device, so the copy will be too
+        merged_encoder = copy.deepcopy(base_model)
 
         merged_encoder = apply_dict_to_model(
             multi_task_vector,
@@ -70,7 +89,6 @@ class IsotropicMerger(TaskVectorBasedMerger):
         )
 
         return merged_encoder
-
 
 class IsotropicCommonTaskSpecificMerger(TaskVectorBasedMerger):
     def __init__(
