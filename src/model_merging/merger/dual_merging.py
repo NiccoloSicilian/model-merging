@@ -14,6 +14,7 @@ from model_merging.utils.utils import (
 from model_merging.merging.structured import (
     get_svd_dict,
     isotropic_sum,
+    avg_layers,
 )
 
 import torch
