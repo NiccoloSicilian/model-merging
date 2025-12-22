@@ -426,7 +426,7 @@ class DualMerger(TaskVectorBasedMerger):
         # Ensure reference state dict is on the right device
         ref_state_dict = {k: v.to(self.device) for k, v in base_model.state_dict().items()}
 
-        multi_task_vector = isotropic_sum(
+        multi_task_vector = avg_layers(
             ref_state_dict=ref_state_dict,
             svd_dict=svd_dict,
         )
@@ -434,6 +434,8 @@ class DualMerger(TaskVectorBasedMerger):
         masses = {key : 0.5 for key in  multi_task_vector}
         module_net = build_clip_vit_network_module (list_layer,copy.deepcopy(multi_task_vector), masses)
         module_vec = flatten_and_move_to_device(module_net['network'].get_dualitymap()())
+        for key in module_vec:
+            multi_task_vector[key] = module_vec[key]
         model_name = self.model_name
         coefficient = 1.0 
 
