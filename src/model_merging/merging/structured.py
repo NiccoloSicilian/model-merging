@@ -270,7 +270,7 @@ def get_svd_dict(
 
     if svd_path is not None and Path(svd_path).exists():
         pylogger.info(f"Loading precomputed SVD dictionary from: {svd_path}")
-        svd_dict = torch.load(svd_path, map_location="cuda")
+        svd_dict = torch.load(svd_path, map_location="cuda", weights_only=False)
 
         if set(svd_dict.keys()) == set(datasets):
             return svd_dict
