@@ -28,7 +28,7 @@ conventions:
   y_key: 'y'
 
 # compression_ratio = 1 / svd_compress_factor, if null the ratio is set to 1 / num_tasks
-svd_compress_factor: null
+svd_compress_factor: 1
 
 misc:
   ckpt_path: ${oc.env:MODELS_PATH}/${nn.encoder.model_name}
