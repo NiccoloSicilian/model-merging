@@ -2,7 +2,7 @@ _target_: model_merging.merger.isotropic_merger.IsotropicMerger
 
 optimal_alphas:
   ViT-B-32:
-    8: 1.00
+    8: 1.30
     14: 1.00
     20: 0.90
   ViT-B-16:
