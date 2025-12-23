@@ -447,7 +447,8 @@ class DualMerger(TaskVectorBasedMerger):
             coefficient = self.optimal_alphas[model_name][num_tasks]
 
         merged_encoder = copy.deepcopy(base_model)
-
+        print("USING ALPHA:", coefficient)
+        
         merged_encoder = apply_dict_to_model(
             multi_task_vector,
             merged_encoder,
