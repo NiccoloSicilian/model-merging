@@ -10,7 +10,7 @@ defaults:
   - hydra: default
   - nn: default
   - train: default
-  - merger: dual # consensus
+  - merger: isotropic # consensus
   - benchmark: N20 # N14, N8
   - override hydra/launcher: basic # basic
   - override hydra/job_logging: none
