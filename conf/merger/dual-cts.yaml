@@ -1,4 +1,4 @@
-_target_: model_merging.merger.dual_merging.DualMerger
+_target_: model_merging.merger.dual_merging.DualCommonTaskSpecificMerger
 
 optimal_alphas:
   ViT-B-32:
