@@ -2,7 +2,7 @@ _target_: model_merging.merger.dual_merging.DualCommonTaskSpecificMerger
 
 optimal_alphas:
   ViT-B-32:
-    8: 1.50
+    8: 0.50
     14: 1.50
     20: 1.20
   ViT-B-16:
