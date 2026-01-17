@@ -481,8 +481,8 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
 
         datasets = list(finetuned_models.keys())
         num_tasks = len(datasets)
-        list_layer = [ key for key in fintuned_models[datasets[0]]]
-        masses = {key : 0.5 for key in fintuned_models[datasets[0]]}
+        list_layer = [ key for key in finetuned_models[datasets[0]]]
+        masses = {key : 0.5 for key in finetuned_models[datasets[0]]}
         for dataset in datasets:
             task_dicts[dataset] = compute_task_dict(
                 base_model.state_dict(), finetuned_models[dataset]
