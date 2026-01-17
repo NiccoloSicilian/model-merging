@@ -582,11 +582,11 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
             combined_space_u = u_combined_space_u @ v_combined_space_u
             combined_space_v = u_combined_space_v @ v_combined_space_v
             ###################################################################
-
+            '''
             combined_space_s = (
                 torch.ones_like(combined_space_s) * combined_space_s.mean()
             )
-
+            '''
             multi_task_vector[key] = torch.linalg.multi_dot(
                 (
                     combined_space_u,
