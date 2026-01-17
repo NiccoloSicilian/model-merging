@@ -481,11 +481,17 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
 
         datasets = list(finetuned_models.keys())
         num_tasks = len(datasets)
-
+        list_layer = [ key for key in  task_dicts[0]]
+        masses = {key : 0.5 for key in  task_dicts[0]}
         for dataset in datasets:
             task_dicts[dataset] = compute_task_dict(
                 base_model.state_dict(), finetuned_models[dataset]
             )
+            
+            module_net = build_clip_vit_network_module (list_layer,copy.deepcopy(task_dicts[dataset]), masses)
+            dm_task_mod = flatten_and_move_to_device(module_net['network'].get_dualitymap()())
+            for key in dm_task_mod:
+                task_dicts[dataset][key] = dm_task_mod[key]
             del finetuned_models[dataset]  # Delete one model at a time
             torch.cuda.empty_cache()
 
