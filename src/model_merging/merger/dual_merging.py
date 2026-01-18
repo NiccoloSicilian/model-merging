@@ -621,7 +621,7 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
                 torch.ones_like(combined_space_s) * combined_space_s.mean()
             )
             '''
-            multi_task_vector[key] = torch.linalg.multi_dot(
+            dm_multi_task_vec[key] = torch.linalg.multi_dot(
                 (
                     combined_space_u,
                     torch.diag(combined_space_s),
@@ -634,7 +634,7 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
         merged_encoder: ImageEncoder = copy.deepcopy(base_model)
 
         merged_encoder = apply_dict_to_model(
-            multi_task_vector,
+            dm_multi_task_vec,
             merged_encoder,
             coefficient=coefficient,
         )
