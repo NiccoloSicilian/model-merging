@@ -484,6 +484,8 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
 
         task_dicts = {}
         datasets = list(finetuned_models.keys())
+        list_layer = [ key for key in finetuned_models[datasets[0]]]
+        masses = {key : 0.5 for key in finetuned_models[datasets[0]]}
         
         # Calculate this BEFORE deleting items
         num_tasks = len(datasets) 
@@ -527,8 +529,6 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
         # ^^^^ DUAL MERGING multitask_vector = DELTA_DM
     
 
-        list_layer = [ key for key in finetuned_models[datasets[0]]]
-        masses = {key : 0.5 for key in finetuned_models[datasets[0]]}
         for dataset in datasets:
             module_net = build_clip_vit_network_module (list_layer,copy.deepcopy(task_dicts[dataset]), masses)
             dm_task_mod = flatten_and_move_to_device(module_net['network'].get_dualitymap()())
