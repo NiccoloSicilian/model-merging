@@ -464,6 +464,8 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
         optimal_alphas,
         model_name,
         device,
+        svd_path, 
+        svd_compress_factor,
     ):
         super().__init__()
 
@@ -471,6 +473,9 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
         self.optimal_alphas = optimal_alphas
         self.model_name = model_name
         self.device = device
+
+        self.svd_path = svd_path
+        self.svd_compress_factor = svd_compress_factor
 
     @torch.no_grad()
     def merge(self, base_model, finetuned_models) -> ImageEncoder | None:
@@ -512,8 +517,6 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
             ref_state_dict=ref_state_dict,
             svd_dict=svd_dict,
         )
-        list_layer = [ key for key in  multi_task_vector]
-        masses = {key : 0.5 for key in  multi_task_vector}
         module_net = build_clip_vit_network_module (list_layer,copy.deepcopy(multi_task_vector), masses)
         module_vec = flatten_and_move_to_device(module_net['network'].get_dualitymap()())
         for key in module_vec:
@@ -524,8 +527,6 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
         # ^^^^ DUAL MERGING multitask_vector = DELTA_DM
     
 
-        datasets = list(finetuned_models.keys())
-        num_tasks = len(datasets)
         list_layer = [ key for key in finetuned_models[datasets[0]]]
         masses = {key : 0.5 for key in finetuned_models[datasets[0]]}
         for dataset in datasets:
