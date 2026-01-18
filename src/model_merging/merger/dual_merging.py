@@ -565,14 +565,31 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
             common_space_s = s[:common_space_index_s]
             common_space_v = v[:common_space_index_s, :]
             ###################################################################
-
+            def project_out_common_space(w, common_space_u, chunk_size=1024):
+                """Project w onto the orthogonal complement of common_space_u in chunks"""
+                # Compute common_space_u.T @ w in chunks along w's second dimension
+                if len(w.shape) == 2:
+                    result = torch.zeros_like(w)
+                    n_cols = w.shape[1]
+                    
+                    for i in range(0, n_cols, chunk_size):
+                        end_idx = min(i + chunk_size, n_cols)
+                        w_chunk = w[:, i:end_idx]
+                        # Project: common_space_u @ (common_space_u.T @ w_chunk)
+                        projection = common_space_u @ (common_space_u.T @ w_chunk)
+                        result[:, i:end_idx] = w_chunk - projection
+                        
+                    return result
+                else:
+                    # Fallback for non-2D tensors
+                    return w - common_space_u @ (common_space_u.T @ w)
             ### Calculate task specific space ###
             n_dims_per_task = int((min(shape_) - common_space_index_s) / num_tasks)
             for i, task_dict in enumerate(task_dicts.values()):
                 w = task_dict[key].to(self.device)
 
                 # calculate the projection onto task specific space to remove the common space
-                w_ts = w - common_space_u @ common_space_u.T @ w
+                w_ts = project_out_common_space(w, common_space_u)
                 u_ts, s_ts, v_ts = torch.linalg.svd(w_ts, full_matrices=False)
 
                 if i == 0:
