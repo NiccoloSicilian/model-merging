@@ -526,7 +526,6 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
         
         # ^^^^ DUAL MERGING multitask_vector = DELTA_DM
     
-        print(svd_dict_dm['model.positional_embedding'], "YEATETAATETEG")
         for dataset in datasets:
             module_net = build_clip_vit_network_module (list_layer,copy.deepcopy(task_dicts[dataset]), masses)
             dm_task_mod = flatten_and_move_to_device(module_net['network'].get_dualitymap()())
@@ -544,7 +543,7 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
                 pylogger.info(f"Combining by avg {key}...")
 
                 for i, (dataset, task_dict) in enumerate(task_dicts.items()):
-                    vec = svd_dict_dm[key].to(self.device)
+                    vec = task_dict[key].to(self.device)
                     if i == 0:
                         dm_multi_task_vec[key] = vec.clone()
                     else:
