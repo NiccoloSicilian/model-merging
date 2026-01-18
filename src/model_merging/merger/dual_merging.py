@@ -565,7 +565,7 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
             )
             common_space_index_s = min(shape_) - _task_specific_total_space_index_s
             print(svd_dict_dm)
-            u, s, v = svd_dict_dm[key]
+            u, s, v = torch.linalg.svd(svd_dict_dm[key], full_matrices=False)
             common_space_u = u[:, :common_space_index_s]
             common_space_s = s[:common_space_index_s]
             common_space_v = v[:common_space_index_s, :]
