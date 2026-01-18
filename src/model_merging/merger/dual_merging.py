@@ -515,17 +515,15 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
         # Ensure reference state dict is on the right device
         ref_state_dict = {k: v.to(self.device) for k, v in base_model.state_dict().items()}
 
-        multi_task_vector = avg_layers(
+        dm_multi_task_vec = avg_layers(
             ref_state_dict=ref_state_dict,
             svd_dict=svd_dict,
         )
-        module_net = build_clip_vit_network_module (list_layer,copy.deepcopy(multi_task_vector), masses)
+        module_net = build_clip_vit_network_module (list_layer,copy.deepcopy(dm_multi_task_vec), masses)
         module_vec = flatten_and_move_to_device(module_net['network'].get_dualitymap()())
         for key in module_vec:
-            multi_task_vector[key] = module_vec[key]
-        svd_dict_dm  = get_svd_dict(
-            task_dicts, datasets, None, self.svd_compress_factor
-        )
+            dm_multi_task_vec[key] = module_vec[key]
+        
         # ^^^^ DUAL MERGING multitask_vector = DELTA_DM
     
         print(svd_dict_dm['model.positional_embedding'], "YEATETAATETEG")
@@ -548,9 +546,9 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
                 for i, (dataset, task_dict) in enumerate(task_dicts.items()):
                     vec = svd_dict_dm[key].to(self.device)
                     if i == 0:
-                        multi_task_vector[key] = vec.clone()
+                        dm_multi_task_vec[key] = vec.clone()
                     else:
-                        multi_task_vector[key] += (vec - multi_task_vector[key]) / (
+                        dm_multi_task_vec[key] += (vec - dm_multi_task_vec[key]) / (
                             i + 1
                         )
                 continue
@@ -563,7 +561,7 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
                 round((min(shape_) - common_space_index_s) / num_tasks) * num_tasks
             )
             common_space_index_s = min(shape_) - _task_specific_total_space_index_s
-            u, s, v = torch.linalg.svd(svd_dict_dm[key], full_matrices=False)
+            u, s, v = torch.linalg.svd(dm_multi_task_vec[key], full_matrices=False)
             common_space_u = u[:, :common_space_index_s]
             common_space_s = s[:common_space_index_s]
             common_space_v = v[:common_space_index_s, :]
