@@ -534,7 +534,6 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
             dm_task_mod = flatten_and_move_to_device(module_net['network'].get_dualitymap()())
             for key in dm_task_mod:
                 task_dicts[dataset][key] = dm_task_mod[key]
-            del finetuned_models[dataset]  # Delete one model at a time
             torch.cuda.empty_cache()
 
         pylogger.info("Computing SVD...")
