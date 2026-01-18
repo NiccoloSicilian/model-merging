@@ -528,7 +528,7 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
         )
         # ^^^^ DUAL MERGING multitask_vector = DELTA_DM
     
-
+        print(svd_dict_dm['model.positional_embedding'], "YEATETAATETEG")
         for dataset in datasets:
             module_net = build_clip_vit_network_module (list_layer,copy.deepcopy(task_dicts[dataset]), masses)
             dm_task_mod = flatten_and_move_to_device(module_net['network'].get_dualitymap()())
@@ -563,7 +563,6 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
                 round((min(shape_) - common_space_index_s) / num_tasks) * num_tasks
             )
             common_space_index_s = min(shape_) - _task_specific_total_space_index_s
-            print(svd_dict_dm)
             u, s, v = torch.linalg.svd(svd_dict_dm[key], full_matrices=False)
             common_space_u = u[:, :common_space_index_s]
             common_space_s = s[:common_space_index_s]
