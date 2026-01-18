@@ -472,7 +472,7 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
         self.common_space_fraction = common_space_fraction
         self.optimal_alphas = optimal_alphas
         self.model_name = model_name
-        self.device = device
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.svd_path = svd_path
         self.svd_compress_factor = svd_compress_factor
