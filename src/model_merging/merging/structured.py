@@ -315,7 +315,7 @@ def get_svd_dict(
     pylogger.info(f"Using compression ratio: {compression_ratio:.4f}")
 
     svd_path = Path(str(svd_path) + f"_compress_{compression_factor}.pt")
-
+    '''
     if svd_path is not None and Path(svd_path).exists():
         pylogger.info(f"Loading precomputed SVD dictionary from: {svd_path}")
         svd_dict = torch.load(svd_path, map_location="cuda", weights_only=False)
@@ -327,7 +327,7 @@ def get_svd_dict(
 
     else:
         pylogger.info("No precomputed SVD dictionary found. Computing from scratch...")
-
+    '''
     svd_dict = decompose_task_vectors(task_dicts, compression_ratio)
     torch.save(svd_dict, svd_path)
     pylogger.info(f"SVD dictionary saved at: {svd_path}")
