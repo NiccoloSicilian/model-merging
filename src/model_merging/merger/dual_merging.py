@@ -518,21 +518,17 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
         module_vec = flatten_and_move_to_device(module_net['network'].get_dualitymap()())
         for key in module_vec:
             multi_task_vector[key] = module_vec[key]
-
+        svd_dict_dm  = get_svd_dict(
+            task_dicts, datasets, None, self.svd_compress_factor
+        )
         # ^^^^ DUAL MERGING multitask_vector = DELTA_DM
-        multi_task_vector = {}
-
-        task_dicts = {}
+    
 
         datasets = list(finetuned_models.keys())
         num_tasks = len(datasets)
         list_layer = [ key for key in finetuned_models[datasets[0]]]
         masses = {key : 0.5 for key in finetuned_models[datasets[0]]}
         for dataset in datasets:
-            task_dicts[dataset] = compute_task_dict(
-                base_model.state_dict(), finetuned_models[dataset]
-            )
-            
             module_net = build_clip_vit_network_module (list_layer,copy.deepcopy(task_dicts[dataset]), masses)
             dm_task_mod = flatten_and_move_to_device(module_net['network'].get_dualitymap()())
             for key in dm_task_mod:
@@ -550,7 +546,7 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
                 pylogger.info(f"Combining by avg {key}...")
 
                 for i, (dataset, task_dict) in enumerate(task_dicts.items()):
-                    vec = task_dict[key].to(self.device)
+                    vec = svd_dict_dm[key].to(self.device)
                     if i == 0:
                         multi_task_vector[key] = vec.clone()
                     else:
@@ -560,9 +556,6 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
                 continue
 
             pylogger.info(f"Computing common space using sum for {key}...")
-            combined_w = sum(
-                [task_dict[key].to(self.device) for task_dict in task_dicts.values()]
-            )
 
             ### Calculate the common space size (making sure that task specific space is equally divisible) ###
             common_space_index_s = int(min(shape_) * self.common_space_fraction)
@@ -570,8 +563,8 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
                 round((min(shape_) - common_space_index_s) / num_tasks) * num_tasks
             )
             common_space_index_s = min(shape_) - _task_specific_total_space_index_s
-
-            u, s, v = torch.linalg.svd(combined_w, full_matrices=False)
+            print(svd_dict_dm)
+            u, s, v = svd_dict_dm[key]
             common_space_u = u[:, :common_space_index_s]
             common_space_s = s[:common_space_index_s]
             common_space_v = v[:common_space_index_s, :]
