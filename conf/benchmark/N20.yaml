@@ -4,17 +4,7 @@
 
 datasets:
   
-  - ${dataset:"SVHN"}
-  - ${dataset:"GTSRB"}
-  - ${dataset:"MNIST"}
-  - ${dataset:"DTD"}
-  # end of 8 tasks
-  - ${dataset:"Flowers102"}
-  - ${dataset:"PCAM"}
-  - ${dataset:"FER2013"}
-  - ${dataset:"OxfordIIITPet"}
-  - ${dataset:"STL10"}
-  - ${dataset:"CIFAR100"}
+  
   # put at end ^
   - ${dataset:"SUN397"}
   - ${dataset:"Cars"}
@@ -28,3 +18,14 @@ datasets:
   - ${dataset:"EMNIST"}
   - ${dataset:"KMNIST"}
   - ${dataset:"RenderedSST2"}
+  - ${dataset:"SVHN"}
+  - ${dataset:"GTSRB"}
+  - ${dataset:"MNIST"}
+  - ${dataset:"DTD"}
+  # end of 8 tasks
+  - ${dataset:"Flowers102"}
+  - ${dataset:"PCAM"}
+  - ${dataset:"FER2013"}
+  - ${dataset:"OxfordIIITPet"}
+  - ${dataset:"STL10"}
+  - ${dataset:"CIFAR100"}
