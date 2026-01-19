@@ -4,7 +4,9 @@
 
 datasets:
   
-  
+  - ${dataset:"OxfordIIITPet"}
+  - ${dataset:"STL10"}
+  - ${dataset:"CIFAR100"}
   # put at end ^
   - ${dataset:"SUN397"}
   - ${dataset:"Cars"}
@@ -26,6 +28,4 @@ datasets:
   - ${dataset:"Flowers102"}
   - ${dataset:"PCAM"}
   - ${dataset:"FER2013"}
-  - ${dataset:"OxfordIIITPet"}
-  - ${dataset:"STL10"}
-  - ${dataset:"CIFAR100"}
+  
