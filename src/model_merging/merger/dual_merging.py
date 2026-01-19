@@ -481,11 +481,11 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
     def merge(self, base_model, finetuned_models) -> ImageEncoder | None:
 
         multi_task_vector = {}
-
+        datasets = list(finetuned_models.keys())
+        
         task_dicts = {}
         list_layer = [ key for key in finetuned_models[datasets[0]]]
         masses = {key : 0.5 for key in finetuned_models[datasets[0]]}
-        datasets = list(finetuned_models.keys())
         num_tasks = len(datasets)
 
         for dataset in datasets:
