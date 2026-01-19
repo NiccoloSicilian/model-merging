@@ -476,7 +476,7 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
 
         self.svd_path = svd_path
         self.svd_compress_factor = svd_compress_factor
-
+'''
     @torch.no_grad()
     def merge(self, base_model, finetuned_models) -> ImageEncoder | None:
         # 1. Move base model to the auto-detected device
@@ -633,11 +633,7 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
             combined_space_u = u_combined_space_u @ v_combined_space_u
             combined_space_v = u_combined_space_v @ v_combined_space_v
             ###################################################################
-            '''
-            combined_space_s = (
-                torch.ones_like(combined_space_s) * combined_space_s.mean()
-            )
-            '''
+           
             dm_multi_task_vec[key] = torch.linalg.multi_dot(
                 (
                     combined_space_u,
@@ -657,3 +653,4 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
         )
 
         return merged_encoder
+'''
