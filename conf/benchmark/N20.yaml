@@ -3,6 +3,15 @@
 # http://arxiv.org/abs/2405.07813
 
 datasets:
+  - ${dataset:"STL10"}
+  - ${dataset:"CIFAR100"}
+  # end of 14 task
+  - ${dataset:"CIFAR10"}
+  - ${dataset:"Food101"}
+  - ${dataset:"FashionMNIST"}
+  - ${dataset:"EMNIST"}
+  - ${dataset:"KMNIST"}
+  - ${dataset:"RenderedSST2"}
   # put at end ^
   - ${dataset:"SUN397"}
   - ${dataset:"Cars"}
@@ -17,12 +26,4 @@ datasets:
   - ${dataset:"PCAM"}
   - ${dataset:"FER2013"}
   - ${dataset:"OxfordIIITPet"}
-  - ${dataset:"STL10"}
-  - ${dataset:"CIFAR100"}
-  # end of 14 task
-  - ${dataset:"CIFAR10"}
-  - ${dataset:"Food101"}
-  - ${dataset:"FashionMNIST"}
-  - ${dataset:"EMNIST"}
-  - ${dataset:"KMNIST"}
-  - ${dataset:"RenderedSST2"}
+  
