@@ -555,7 +555,7 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
                 w_ts = w - common_space_u @ common_space_u.T @ w
                 original_norm = torch.norm(w, p='fro') ** 2
                 
-                ts_norm = torch.norm(w_ts +w , p='fro') ** 2
+                ts_norm = torch.norm(w - w_ts , p='fro') ** 2
                 relative_energy = ts_norm / original_norm
                 print(f"Energy remaining: {relative_energy:.4f}")
                 u_ts, s_ts, v_ts = torch.linalg.svd(w_ts, full_matrices=False)
@@ -733,14 +733,14 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
                         # Project: common_space_u @ (common_space_u.T @ w_chunk)
                         projection = common_space_u @ (common_space_u.T @ w_chunk)
                         result[:, i:end_idx] = w_chunk - projection
-                    ts_norm = torch.norm(result+w, p='fro') ** 2
+                    ts_norm = torch.norm(w - result, p='fro') ** 2
                     relative_energy = ts_norm / original_norm
                     print(f"Energy remaining: {relative_energy:.4f}")
                     return result
                 else:
                     # Fallback for non-2D tensors
                     w_ts = w - common_space_u @ (common_space_u.T @ w)
-                    ts_norm = torch.norm(w_ts, p='fro')
+                    ts_norm = torch.norm(w - w_ts, p='fro')
                     relative_energy = ts_norm / original_norm
                     print(f"Energy remaining: {relative_energy:.4f}")
                     return w_ts
