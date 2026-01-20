@@ -11,7 +11,7 @@ defaults:
   - nn: default
   - train: default
   - merger: dual # consensus
-  - benchmark: N14 #, N8
+  - benchmark: N8 #, N8
   - override hydra/launcher: basic # basic
   - override hydra/job_logging: none
   - override hydra/hydra_logging: none
@@ -28,7 +28,7 @@ conventions:
   y_key: 'y'
 
 # compression_ratio = 1 / svd_compress_factor, if null the ratio is set to 1 / num_tasks
-svd_compress_factor: 1
+svd_compress_factor: 0.2
 
 misc:
   ckpt_path: ${oc.env:MODELS_PATH}/${nn.encoder.model_name}
