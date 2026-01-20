@@ -501,7 +501,7 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
         for dataset in task_dicts:
             for key in ref_task_dict:
                 is_matrix = "u" in svd_dict[dataset][key]
-                if is matrix:
+                if is_matrix:
                     u = svd_dicts[dataset][key]["u"].to(self.device)
                     s = svd_dicts[dataset][key]["s"].to(self.device)
                     v = svd_dicts[dataset][key]["v"].to(self.device)
