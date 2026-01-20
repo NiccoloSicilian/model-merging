@@ -476,6 +476,7 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
 
         self.svd_path = svd_path
         self.svd_compress_factor = svd_compress_factor
+        
     @torch.no_grad()
     def merge(self, base_model, finetuned_models) -> ImageEncoder | None:
 
