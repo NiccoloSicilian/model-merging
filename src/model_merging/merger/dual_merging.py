@@ -497,6 +497,10 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
         task_dicts = get_svd_dict(
             task_dicts, datasets, self.svd_path, self.svd_compress_factor
         )
+
+        for i, task_dict in enumerate(task_dicts.values()):
+            for key in ref_task_dict:
+                task_dict[i][key] = 
         pylogger.info("Computing SVD...")
         ref_task_dict = task_dicts[datasets[0]]
         for key in ref_task_dict:
