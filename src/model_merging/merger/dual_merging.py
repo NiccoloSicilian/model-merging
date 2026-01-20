@@ -477,159 +477,6 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
         self.svd_path = svd_path
         self.svd_compress_factor = svd_compress_factor
         
-    
-    @torch.no_grad()
-    def merge(self, base_model, finetuned_models) -> ImageEncoder | None:
-        multi_task_vector = {}
-        datasets = list(finetuned_models.keys())
-        
-        task_dicts = {}
-        list_layer = [ key for key in finetuned_models[datasets[0]]]
-        masses = {key : 0.5 for key in finetuned_models[datasets[0]]}
-        num_tasks = len(datasets)
-
-        for dataset in datasets:
-            task_dicts[dataset] = compute_task_dict(
-                base_model.state_dict(), finetuned_models[dataset]
-            )
-            del finetuned_models[dataset]  # Delete one model at a time
-            torch.cuda.empty_cache()
-        ref_task_dict = task_dicts[datasets[0]]
-        svd_dicts = get_svd_dict(
-                    task_dicts, datasets, self.svd_path, self.svd_compress_factor
-                )
-        for dataset in task_dicts:
-            for key in ref_task_dict:
-                is_matrix = "u" in svd_dicts[dataset][key]
-                if is_matrix:
-                    u = svd_dicts[dataset][key]["u"].to(self.device)
-                    s = svd_dicts[dataset][key]["s"].to(self.device)
-                    v = svd_dicts[dataset][key]["v"].to(self.device)
-                    task_dicts[dataset][key] = u @ torch.diag_embed(s) @ v
-                else:
-                    task_dicts[dataset][key] = svd_dicts[dataset][key]["dim1"].to(self.device)
-                
-
-        pylogger.info("Computing SVD...")
-        for key in ref_task_dict:
-            shape_ = ref_task_dict[key].shape
-
-            is_2d_matrix = (len(shape_) == 2) and ("text_projection" not in key)
-            if not is_2d_matrix:
-                pylogger.info(f"Combining by avg {key}...")
-
-                for i, (dataset, task_dict) in enumerate(task_dicts.items()):
-                    vec = task_dict[key].to(self.device)
-                    if i == 0:
-                        multi_task_vector[key] = vec.clone()
-                    else:
-                        multi_task_vector[key] += (vec - multi_task_vector[key]) / (
-                            i + 1
-                        )
-                continue
-
-            pylogger.info(f"Computing common space using sum for {key}...")
-            combined_w = sum(
-                [task_dict[key].to(self.device) for task_dict in task_dicts.values()]
-            )
-
-            ### Calculate the common space size (making sure that task specific space is equally divisible) ###
-            common_space_index_s = int(min(shape_) * self.common_space_fraction)
-            _task_specific_total_space_index_s = (
-                round((min(shape_) - common_space_index_s) / num_tasks) * num_tasks
-            )
-            common_space_index_s = min(shape_) - _task_specific_total_space_index_s
-
-            u, s, v = torch.linalg.svd(combined_w, full_matrices=False)
-        
-            common_space_u = u[:, :common_space_index_s]
-            common_space_s = s[:common_space_index_s]
-            common_space_v = v[:common_space_index_s, :]
-            ###################################################################
-
-            ### Calculate task specific space ###
-            n_dims_per_task = int((min(shape_) - common_space_index_s) / num_tasks)
-            for i, task_dict in enumerate(task_dicts.values()):
-                w = task_dict[key].to(self.device)
-
-                # calculate the projection onto task specific space to remove the common space
-                w_ts = w - common_space_u @ common_space_u.T @ w
-                original_norm = torch.norm(w, p='fro') ** 2
-                
-                ts_norm = torch.norm(w - w_ts , p='fro') ** 2
-                relative_energy = ts_norm / original_norm
-                print(f"Energy remaining: {relative_energy:.4f}")
-                u_ts, s_ts, v_ts = torch.linalg.svd(w_ts, full_matrices=False)
-
-                if i == 0:
-                    combined_space_u = torch.zeros_like(u_ts, device=self.device)
-                    combined_space_s = torch.zeros_like(s_ts, device=self.device)
-                    combined_space_v = torch.zeros_like(v_ts, device=self.device)
-
-                combined_space_u[:, i * n_dims_per_task : (i + 1) * n_dims_per_task] = (
-                    u_ts[:, :n_dims_per_task]
-                )
-                combined_space_s[i * n_dims_per_task : (i + 1) * n_dims_per_task] = (
-                    s_ts[:n_dims_per_task]
-                )
-                combined_space_v[i * n_dims_per_task : (i + 1) * n_dims_per_task, :] = (
-                    v_ts[:n_dims_per_task, :]
-                )
-            ###################################################################
-
-            combined_space_u[
-                :,
-                num_tasks * n_dims_per_task : num_tasks * n_dims_per_task
-                + common_space_index_s,
-            ] = common_space_u
-            combined_space_s[
-                num_tasks * n_dims_per_task : num_tasks * n_dims_per_task
-                + common_space_index_s
-            ] = common_space_s
-            combined_space_v[
-                num_tasks * n_dims_per_task : num_tasks * n_dims_per_task
-                + common_space_index_s,
-                :,
-            ] = common_space_v
-
-            ### Orthogonalize combined_space_u and combined_space_v ###
-            u_combined_space_u, s_combined_space_u, v_combined_space_u = (
-                torch.linalg.svd(combined_space_u, full_matrices=False)
-            )
-            u_combined_space_v, s_combined_space_v, v_combined_space_v = (
-                torch.linalg.svd(combined_space_v, full_matrices=False)
-            )
-            combined_space_u = u_combined_space_u @ v_combined_space_u
-            combined_space_v = u_combined_space_v @ v_combined_space_v
-            ###################################################################
-
-            combined_space_s = (
-                torch.ones_like(combined_space_s) * combined_space_s.mean()
-            )
-
-            multi_task_vector[key] = torch.linalg.multi_dot(
-                (
-                    combined_space_u,
-                    torch.diag(combined_space_s),
-                    combined_space_v,
-                )
-            )
-        module_net = build_clip_vit_network_module (list_layer,copy.deepcopy(multi_task_vector), masses)
-        module_vec = flatten_and_move_to_device(module_net['network'].get_dualitymap()())
-        for key in module_vec:
-            multi_task_vector[key] = module_vec[key]
-        coefficient = self.optimal_alphas[self.model_name][num_tasks]
-
-        merged_encoder: ImageEncoder = copy.deepcopy(base_model)
-
-        merged_encoder = apply_dict_to_model(
-            multi_task_vector,
-            merged_encoder,
-            coefficient=coefficient,
-        )
-
-        return merged_encoder
-    '''
     @torch.no_grad()
     def merge(self, base_model, finetuned_models) -> ImageEncoder | None:
         # 1. Move base model to the auto-detected device
@@ -814,9 +661,160 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
         )
 
         return merged_encoder
+    '''
+    @torch.no_grad()
+    def merge(self, base_model, finetuned_models) -> ImageEncoder | None:
+        multi_task_vector = {}
+        datasets = list(finetuned_models.keys())
+        
+        task_dicts = {}
+        list_layer = [ key for key in finetuned_models[datasets[0]]]
+        masses = {key : 0.5 for key in finetuned_models[datasets[0]]}
+        num_tasks = len(datasets)
 
-'''
-    
+        for dataset in datasets:
+            task_dicts[dataset] = compute_task_dict(
+                base_model.state_dict(), finetuned_models[dataset]
+            )
+            del finetuned_models[dataset]  # Delete one model at a time
+            torch.cuda.empty_cache()
+        ref_task_dict = task_dicts[datasets[0]]
+        svd_dicts = get_svd_dict(
+                    task_dicts, datasets, self.svd_path, self.svd_compress_factor
+                )
+        for dataset in task_dicts:
+            for key in ref_task_dict:
+                is_matrix = "u" in svd_dicts[dataset][key]
+                if is_matrix:
+                    u = svd_dicts[dataset][key]["u"].to(self.device)
+                    s = svd_dicts[dataset][key]["s"].to(self.device)
+                    v = svd_dicts[dataset][key]["v"].to(self.device)
+                    task_dicts[dataset][key] = u @ torch.diag_embed(s) @ v
+                else:
+                    task_dicts[dataset][key] = svd_dicts[dataset][key]["dim1"].to(self.device)
+                
+
+        pylogger.info("Computing SVD...")
+        for key in ref_task_dict:
+            shape_ = ref_task_dict[key].shape
+
+            is_2d_matrix = (len(shape_) == 2) and ("text_projection" not in key)
+            if not is_2d_matrix:
+                pylogger.info(f"Combining by avg {key}...")
+
+                for i, (dataset, task_dict) in enumerate(task_dicts.items()):
+                    vec = task_dict[key].to(self.device)
+                    if i == 0:
+                        multi_task_vector[key] = vec.clone()
+                    else:
+                        multi_task_vector[key] += (vec - multi_task_vector[key]) / (
+                            i + 1
+                        )
+                continue
+
+            pylogger.info(f"Computing common space using sum for {key}...")
+            combined_w = sum(
+                [task_dict[key].to(self.device) for task_dict in task_dicts.values()]
+            )
+
+            ### Calculate the common space size (making sure that task specific space is equally divisible) ###
+            common_space_index_s = int(min(shape_) * self.common_space_fraction)
+            _task_specific_total_space_index_s = (
+                round((min(shape_) - common_space_index_s) / num_tasks) * num_tasks
+            )
+            common_space_index_s = min(shape_) - _task_specific_total_space_index_s
+
+            u, s, v = torch.linalg.svd(combined_w, full_matrices=False)
+        
+            common_space_u = u[:, :common_space_index_s]
+            common_space_s = s[:common_space_index_s]
+            common_space_v = v[:common_space_index_s, :]
+            ###################################################################
+
+            ### Calculate task specific space ###
+            n_dims_per_task = int((min(shape_) - common_space_index_s) / num_tasks)
+            for i, task_dict in enumerate(task_dicts.values()):
+                w = task_dict[key].to(self.device)
+
+                # calculate the projection onto task specific space to remove the common space
+                w_ts = w - common_space_u @ common_space_u.T @ w
+                original_norm = torch.norm(w, p='fro') ** 2
+                
+                ts_norm = torch.norm(w - w_ts , p='fro') ** 2
+                relative_energy = ts_norm / original_norm
+                print(f"Energy remaining: {relative_energy:.4f}")
+                u_ts, s_ts, v_ts = torch.linalg.svd(w_ts, full_matrices=False)
+
+                if i == 0:
+                    combined_space_u = torch.zeros_like(u_ts, device=self.device)
+                    combined_space_s = torch.zeros_like(s_ts, device=self.device)
+                    combined_space_v = torch.zeros_like(v_ts, device=self.device)
+
+                combined_space_u[:, i * n_dims_per_task : (i + 1) * n_dims_per_task] = (
+                    u_ts[:, :n_dims_per_task]
+                )
+                combined_space_s[i * n_dims_per_task : (i + 1) * n_dims_per_task] = (
+                    s_ts[:n_dims_per_task]
+                )
+                combined_space_v[i * n_dims_per_task : (i + 1) * n_dims_per_task, :] = (
+                    v_ts[:n_dims_per_task, :]
+                )
+            ###################################################################
+
+            combined_space_u[
+                :,
+                num_tasks * n_dims_per_task : num_tasks * n_dims_per_task
+                + common_space_index_s,
+            ] = common_space_u
+            combined_space_s[
+                num_tasks * n_dims_per_task : num_tasks * n_dims_per_task
+                + common_space_index_s
+            ] = common_space_s
+            combined_space_v[
+                num_tasks * n_dims_per_task : num_tasks * n_dims_per_task
+                + common_space_index_s,
+                :,
+            ] = common_space_v
+
+            ### Orthogonalize combined_space_u and combined_space_v ###
+            u_combined_space_u, s_combined_space_u, v_combined_space_u = (
+                torch.linalg.svd(combined_space_u, full_matrices=False)
+            )
+            u_combined_space_v, s_combined_space_v, v_combined_space_v = (
+                torch.linalg.svd(combined_space_v, full_matrices=False)
+            )
+            combined_space_u = u_combined_space_u @ v_combined_space_u
+            combined_space_v = u_combined_space_v @ v_combined_space_v
+            ###################################################################
+
+            combined_space_s = (
+                torch.ones_like(combined_space_s) * combined_space_s.mean()
+            )
+
+            multi_task_vector[key] = torch.linalg.multi_dot(
+                (
+                    combined_space_u,
+                    torch.diag(combined_space_s),
+                    combined_space_v,
+                )
+            )
+        module_net = build_clip_vit_network_module (list_layer,copy.deepcopy(multi_task_vector), masses)
+        module_vec = flatten_and_move_to_device(module_net['network'].get_dualitymap()())
+        for key in module_vec:
+            multi_task_vector[key] = module_vec[key]
+        coefficient = self.optimal_alphas[self.model_name][num_tasks]
+
+        merged_encoder: ImageEncoder = copy.deepcopy(base_model)
+
+        merged_encoder = apply_dict_to_model(
+            multi_task_vector,
+            merged_encoder,
+            coefficient=coefficient,
+        )
+
+        return merged_encoder
+    '''
+        
 
     
 
