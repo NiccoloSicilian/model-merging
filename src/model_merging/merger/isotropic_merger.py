@@ -62,7 +62,9 @@ class IsotropicMerger(TaskVectorBasedMerger):
             
             if self.device.type == "cuda":
                 torch.cuda.empty_cache()
-        svd_dict = get_svd_dict..
+        svd_dict = get_svd_dict(
+            task_dicts, datasets, self.svd_path, self.svd_compress_factor
+        )
         # Ensure reference state dict is on the right device
         ref_state_dict = {k: v.to(self.device) for k, v in base_model.state_dict().items()}
 
