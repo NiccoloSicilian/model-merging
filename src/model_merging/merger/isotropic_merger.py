@@ -72,7 +72,6 @@ class IsotropicMerger(TaskVectorBasedMerger):
             ref_state_dict=ref_state_dict,
             svd_dict=svd_dict,
         )
-
         model_name = self.model_name
         coefficient = 1.0 
 
@@ -80,8 +79,10 @@ class IsotropicMerger(TaskVectorBasedMerger):
             model_name in self.optimal_alphas
             and num_tasks in self.optimal_alphas[model_name]
         ):
-            coefficient = self.optimal_alphas[model_name][num_tasks]
-
+            coefficient = self.optimal_alphas[model_name][num_tasks
+            coefficient *= num_tasks
+            
+        
         merged_encoder = copy.deepcopy(base_model)
 
         merged_encoder = apply_dict_to_model(
