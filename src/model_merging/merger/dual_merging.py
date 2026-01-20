@@ -504,7 +504,7 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
                 u = svd_dicts[dataset][key]["u"].to(self.device)
                 s = svd_dicts[dataset][key]["s"].to(self.device)
                 v = svd_dicts[dataset][key]["v"].to(self.device)
-                task_dict[dataset][key] = u @ torch.diag_embed(s) @ v
+                task_dicts[dataset][key] = u @ torch.diag_embed(s) @ v
                 
         pylogger.info("Computing SVD...")
         for key in ref_task_dict:
