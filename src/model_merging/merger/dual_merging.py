@@ -495,7 +495,9 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
             del finetuned_models[dataset]  # Delete one model at a time
             torch.cuda.empty_cache()
         ref_task_dict = task_dicts[datasets[0]]
-
+        svd_dicts = get_svd_dict(
+                    task_dicts, datasets, self.svd_path, self.svd_compress_factor
+                )
         for dataset in task_dicts:
             for key in ref_task_dict:
                 is_matrix = "u" in svd_dicts[dataset][key]
