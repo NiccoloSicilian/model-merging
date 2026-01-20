@@ -329,7 +329,7 @@ def get_svd_dict(
         pylogger.info("No precomputed SVD dictionary found. Computing from scratch...")
     '''
     svd_dict = decompose_task_vectors(task_dicts, compression_ratio)
-    torch.save(svd_dict, svd_path)
+    #torch.save(svd_dict, svd_path)
     pylogger.info(f"SVD dictionary saved at: {svd_path}")
 
     return svd_dict
