@@ -720,7 +720,7 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
             def project_out_common_space(w, common_space_u, chunk_size=1024):
                 """Project w onto the orthogonal complement of common_space_u in chunks"""
                 # Compute common_space_u.T @ w in chunks along w's second dimension
-                original_norm = torch.norm(w, p='fro')
+                original_norm = torch.norm(w, p='fro') ** 2
             
                 if len(w.shape) == 2:
                     result = torch.zeros_like(w)
@@ -732,7 +732,7 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
                         # Project: common_space_u @ (common_space_u.T @ w_chunk)
                         projection = common_space_u @ (common_space_u.T @ w_chunk)
                         result[:, i:end_idx] = w_chunk - projection
-                    ts_norm = torch.norm(result, p='fro')
+                    ts_norm = torch.norm(result+w, p='fro') ** 2
                     relative_energy = ts_norm / original_norm
                     print(f"Energy remaining: {relative_energy:.4f}")
                     return result
