@@ -537,6 +537,7 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
             common_space_index_s = min(shape_) - _task_specific_total_space_index_s
 
             u, s, v = torch.linalg.svd(combined_w, full_matrices=False)
+        
             common_space_u = u[:, :common_space_index_s]
             common_space_s = s[:common_space_index_s]
             common_space_v = v[:common_space_index_s, :]
@@ -549,6 +550,11 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
 
                 # calculate the projection onto task specific space to remove the common space
                 w_ts = w - common_space_u @ common_space_u.T @ w
+                original_norm = torch.norm(w, p='fro')
+                
+                ts_norm = torch.norm(w_ts, p='fro')
+                relative_energy = ts_norm / original_norm
+                print(f"Energy remaining: {relative_energy:.4f}")
                 u_ts, s_ts, v_ts = torch.linalg.svd(w_ts, full_matrices=False)
 
                 if i == 0:
