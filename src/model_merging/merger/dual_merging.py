@@ -476,7 +476,7 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
 
         self.svd_path = svd_path
         self.svd_compress_factor = svd_compress_factor
-'''
+
     @torch.no_grad()
     def merge(self, base_model, finetuned_models) -> ImageEncoder | None:
 
@@ -494,7 +494,9 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
             )
             del finetuned_models[dataset]  # Delete one model at a time
             torch.cuda.empty_cache()
-
+        task_dicts = get_svd_dict(
+            task_dicts, datasets, self.svd_path, self.svd_compress_factor
+        )
         pylogger.info("Computing SVD...")
         ref_task_dict = task_dicts[datasets[0]]
         for key in ref_task_dict:
@@ -794,4 +796,4 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
         )
 
         return merged_encoder
-
+'''
