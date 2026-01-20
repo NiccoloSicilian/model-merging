@@ -81,7 +81,6 @@ class IsotropicMerger(TaskVectorBasedMerger):
         ):
             coefficient = self.optimal_alphas[model_name][num_tasks]
         
-        coefficient *= num_tasks
             
         
         merged_encoder = copy.deepcopy(base_model)
