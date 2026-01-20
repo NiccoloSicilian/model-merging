@@ -496,6 +496,17 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
             torch.cuda.empty_cache()
         ref_task_dict = task_dicts[datasets[0]]
 
+        for dataset in task_dicts:
+            for key in ref_task_dict:
+                is_matrix = "u" in svd_dicts[dataset][key]
+                if is_matrix:
+                    u = svd_dicts[dataset][key]["u"].to(self.device)
+                    s = svd_dicts[dataset][key]["s"].to(self.device)
+                    v = svd_dicts[dataset][key]["v"].to(self.device)
+                    task_dicts[dataset][key] = u @ torch.diag_embed(s) @ v
+                else:
+                    task_dicts[dataset][key] = svd_dicts[dataset][key]["dim1"].to(self.device)
+                
 
         pylogger.info("Computing SVD...")
         for key in ref_task_dict:
