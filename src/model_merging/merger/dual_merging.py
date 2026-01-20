@@ -494,13 +494,18 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
             )
             del finetuned_models[dataset]  # Delete one model at a time
             torch.cuda.empty_cache()
-        task_dicts = get_svd_dict(
+        svd_dicts = get_svd_dict(
             task_dicts, datasets, self.svd_path, self.svd_compress_factor
         )
 
         for i, task_dict in enumerate(task_dicts.values()):
             for key in ref_task_dict:
-                task_dict[i][key] = 
+                
+                u = svd_dicts[i][key]["u"].to(device)
+                s = svd_dicts[i][key]["s"].to(device)
+                v = svd_dicts[i][key]["v"].to(device)
+                task_dict[i][key] =
+                
         pylogger.info("Computing SVD...")
         ref_task_dict = task_dicts[datasets[0]]
         for key in ref_task_dict:
