@@ -15,6 +15,6 @@ optimal_alphas:
     20: 1.00
 
 svd_path: "${oc.env:MODELS_PATH}svd_dict_${nn.encoder.model_name}.pt"
-svd_compress_factor: 0.1
+svd_compress_factor: 0.15
 device: ${device}
 model_name: ${nn.encoder.model_name}
