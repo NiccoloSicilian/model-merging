@@ -401,8 +401,8 @@ class DualMerger(TaskVectorBasedMerger):
         
         # Calculate this BEFORE deleting items
         num_tasks = len(datasets) 
-        list_layer = [ key for key in  multi_task_vector]
-        masses = {key : 0.5 for key in  multi_task_vector}
+        list_layer = [ key for key in  finetuned_models[datasets[0]]]]
+        masses = {key : 0.5 for key in finetuned_models[datasets[0]]]}
         
         for dataset in datasets:
             # 2. Move the finetuned state_dict to device manually
