@@ -414,10 +414,7 @@ class DualMerger(TaskVectorBasedMerger):
             task_dicts[dataset] = compute_task_dict(
                 base_model.state_dict(), ft_state_dict
             )
-            module_net = build_clip_vit_network_module (list_layer,copy.deepcopy(task_dicts[dataset]), masses)
-            dm_task_mod = flatten_and_move_to_device(module_net['network'].get_dualitymap()())
-            for key in dm_task_mod:
-                task_dicts[dataset][key] = dm_task_mod[key]
+            
             torch.cuda.empty_cache()
             # Cleanup to save VRAM
             del finetuned_models[dataset] 
@@ -433,7 +430,7 @@ class DualMerger(TaskVectorBasedMerger):
         # Ensure reference state dict is on the right device
         ref_state_dict = {k: v.to(self.device) for k, v in base_model.state_dict().items()}
 
-        multi_task_vector = avg_layers(
+        multi_task_vector = isotropic_sum(
             ref_state_dict=ref_state_dict,
             svd_dict=svd_dict,
         )
