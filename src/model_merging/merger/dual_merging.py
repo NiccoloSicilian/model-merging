@@ -433,7 +433,7 @@ class DualMerger(TaskVectorBasedMerger):
         # Ensure reference state dict is on the right device
         ref_state_dict = {k: v.to(self.device) for k, v in base_model.state_dict().items()}
 
-        multi_task_vector = isotropic_sum(
+        multi_task_vector = avg_layers(
             ref_state_dict=ref_state_dict,
             svd_dict=svd_dict,
         )
