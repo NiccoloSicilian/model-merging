@@ -544,6 +544,7 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
 
         self.svd_path = svd_path
         self.svd_compress_factor = svd_compress_factor
+        
     @torch.no_grad()
     def merge(self, base_model, finetuned_models) -> ImageEncoder | None:
         multi_task_vector = {}
@@ -560,23 +561,9 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
             )
             del finetuned_models[dataset]  # Delete one model at a time
             torch.cuda.empty_cache()
-        ref_task_dict = task_dicts[datasets[0]]
-        svd_dicts = get_svd_dict(
-                    task_dicts, datasets, self.svd_path, self.svd_compress_factor
-                )
-        for dataset in task_dicts:
-            for key in ref_task_dict:
-                is_matrix = "u" in svd_dicts[dataset][key]
-                if is_matrix:
-                    u = svd_dicts[dataset][key]["u"].to(self.device)
-                    s = svd_dicts[dataset][key]["s"].to(self.device)
-                    v = svd_dicts[dataset][key]["v"].to(self.device)
-                    task_dicts[dataset][key] = u @ torch.diag_embed(s) @ v
-                else:
-                    task_dicts[dataset][key] = svd_dicts[dataset][key]["dim1"].to(self.device)
-                
 
         pylogger.info("Computing SVD...")
+        ref_task_dict = task_dicts[datasets[0]]
         for key in ref_task_dict:
             shape_ = ref_task_dict[key].shape
 
@@ -607,7 +594,6 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
             common_space_index_s = min(shape_) - _task_specific_total_space_index_s
 
             u, s, v = torch.linalg.svd(combined_w, full_matrices=False)
-        
             common_space_u = u[:, :common_space_index_s]
             common_space_s = s[:common_space_index_s]
             common_space_v = v[:common_space_index_s, :]
@@ -620,11 +606,6 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
 
                 # calculate the projection onto task specific space to remove the common space
                 w_ts = w - common_space_u @ common_space_u.T @ w
-                original_norm = torch.norm(w, p='fro') ** 2
-                
-                ts_norm = torch.norm(w - w_ts , p='fro') ** 2
-                relative_energy = ts_norm / original_norm
-                print(f"Energy remaining: {relative_energy:.4f}")
                 u_ts, s_ts, v_ts = torch.linalg.svd(w_ts, full_matrices=False)
 
                 if i == 0:
@@ -680,6 +661,7 @@ class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
                     combined_space_v,
                 )
             )
+
         module_net = build_clip_vit_network_module (list_layer,copy.deepcopy(multi_task_vector), masses)
         module_vec = flatten_and_move_to_device(module_net['network'].get_dualitymap()())
         for key in module_vec:
