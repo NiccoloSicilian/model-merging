@@ -3,14 +3,14 @@
 # http://arxiv.org/abs/2405.07813
 
 datasets:
-  - ${dataset:"Food101"}
-  - ${dataset:"FashionMNIST"}
-  - ${dataset:"EMNIST"}
+  - ${dataset:"Cars"}
   - ${dataset:"KMNIST"}
-  - ${dataset:"RenderedSST2"}
+  - ${dataset:"RESISC45"}
+  - ${dataset:"EMNIST"}
+  - ${dataset:"MNIST"}
   
   - ${dataset:"SUN397"}
-  - ${dataset:"Cars"}
+  #- ${dataset:"Cars"}
   - ${dataset:"RESISC45"}
   - ${dataset:"EuroSAT"}
   - ${dataset:"SVHN"}
@@ -27,3 +27,8 @@ datasets:
   # end of 14 task
   - ${dataset:"CIFAR10"}
   
+  - ${dataset:"Food101"}
+  - ${dataset:"FashionMNIST"}
+  - ${dataset:"EMNIST"}
+  - ${dataset:"KMNIST"}
+  - ${dataset:"RenderedSST2"}
