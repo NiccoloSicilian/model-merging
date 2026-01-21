@@ -11,11 +11,11 @@ datasets:
   
   - ${dataset:"SUN397"}
   #- ${dataset:"Cars"}
-  - ${dataset:"RESISC45"}
+  #- ${dataset:"RESISC45"}
   - ${dataset:"EuroSAT"}
   - ${dataset:"SVHN"}
   - ${dataset:"GTSRB"}
-  - ${dataset:"MNIST"}
+  #- ${dataset:"MNIST"}
   - ${dataset:"DTD"}
   # end of 8 tasks
   - ${dataset:"Flowers102"}
@@ -29,6 +29,6 @@ datasets:
   
   - ${dataset:"Food101"}
   - ${dataset:"FashionMNIST"}
-  - ${dataset:"EMNIST"}
-  - ${dataset:"KMNIST"}
+  #- ${dataset:"EMNIST"}
+  #- ${dataset:"KMNIST"}
   - ${dataset:"RenderedSST2"}
