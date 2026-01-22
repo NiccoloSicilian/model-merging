@@ -2,7 +2,7 @@ _target_: model_merging.merger.dual_merging.DualMerger
 
 optimal_alphas:
   ViT-B-32:
-    8: 7.5
+    8: 1.5
     14: 1.45
     20: 1.20
   ViT-B-16:
@@ -16,6 +16,6 @@ optimal_alphas:
 
 svd_path: "${oc.env:MODELS_PATH}svd_dict_${nn.encoder.model_name}.pt"
 #svd_compress_factor: 16.5
-svd_compress_factor: null
+svd_compress_factor: 1
 device: ${device}
 model_name: ${nn.encoder.model_name}
