@@ -389,7 +389,72 @@ class DualMerger(TaskVectorBasedMerger):
         # Auto-detect: Use GPU if available, else CPU.
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"🚀 IsotropicMerger initialized on device: {self.device}")
-    
+    @torch.no_grad()
+    def merge(self, base_model, finetuned_models):
+        # 1. Move base model to the auto-detected device
+        base_model = base_model.to(self.device)
+
+        task_dicts = {}
+        datasets = list(finetuned_models.keys())
+        
+        # Calculate this BEFORE deleting items
+        num_tasks = len(datasets) 
+
+        for dataset in datasets:
+            # 2. Move the finetuned state_dict to device manually
+            # (finetuned_models[dataset] is an OrderedDict, not a Module)
+            ft_state_dict = {
+                k: v.to(self.device) for k, v in finetuned_models[dataset].items()
+            }
+
+            task_dicts[dataset] = compute_task_dict(
+                base_model.state_dict(), ft_state_dict
+            )
+            
+            # Cleanup to save VRAM
+            del finetuned_models[dataset] 
+            del ft_state_dict 
+            
+            if self.device.type == "cuda":
+                torch.cuda.empty_cache()
+
+        svd_dict = get_svd_dict(
+            task_dicts, datasets, self.svd_path, self.svd_compress_factor
+        )
+
+        # Ensure reference state dict is on the right device
+        ref_state_dict = {k: v.to(self.device) for k, v in base_model.state_dict().items()}
+
+        multi_task_vector = avg_layers(
+            ref_state_dict=ref_state_dict,
+            svd_dict=svd_dict,
+        )
+        list_layer = [ key for key in  multi_task_vector]
+        masses = {key : 0.5 for key in  multi_task_vector}
+        module_net = build_clip_vit_network_module (list_layer,copy.deepcopy(multi_task_vector), masses)
+        module_vec = flatten_and_move_to_device(module_net['network'].get_dualitymap()())
+        for key in module_vec:
+            multi_task_vector[key] = module_vec[key]
+        model_name = self.model_name
+        coefficient = 1.0 
+
+        if (
+            model_name in self.optimal_alphas
+            and num_tasks in self.optimal_alphas[model_name]
+        ):
+            coefficient = self.optimal_alphas[model_name][num_tasks]
+
+        merged_encoder = copy.deepcopy(base_model)
+        print("USING ALPHA:", coefficient)
+        
+        merged_encoder = apply_dict_to_model(
+            multi_task_vector,
+            merged_encoder,
+            coefficient=coefficient,
+        )
+
+        return merged_encoder
+'''
     @torch.no_grad()
     def merge(self, base_model, finetuned_models):
         # 1. Move base model to the auto-detected device
@@ -437,72 +502,6 @@ class DualMerger(TaskVectorBasedMerger):
             svd_dict=svd_dict,
         )
         
-        model_name = self.model_name
-        coefficient = 1.0 
-
-        if (
-            model_name in self.optimal_alphas
-            and num_tasks in self.optimal_alphas[model_name]
-        ):
-            coefficient = self.optimal_alphas[model_name][num_tasks]
-
-        merged_encoder = copy.deepcopy(base_model)
-        print("USING ALPHA:", coefficient)
-        
-        merged_encoder = apply_dict_to_model(
-            multi_task_vector,
-            merged_encoder,
-            coefficient=coefficient,
-        )
-
-        return merged_encoder
-'''
-    @torch.no_grad()
-    def merge(self, base_model, finetuned_models):
-        # 1. Move base model to the auto-detected device
-        base_model = base_model.to(self.device)
-
-        task_dicts = {}
-        datasets = list(finetuned_models.keys())
-        
-        # Calculate this BEFORE deleting items
-        num_tasks = len(datasets) 
-
-        for dataset in datasets:
-            # 2. Move the finetuned state_dict to device manually
-            # (finetuned_models[dataset] is an OrderedDict, not a Module)
-            ft_state_dict = {
-                k: v.to(self.device) for k, v in finetuned_models[dataset].items()
-            }
-
-            task_dicts[dataset] = compute_task_dict(
-                base_model.state_dict(), ft_state_dict
-            )
-            
-            # Cleanup to save VRAM
-            del finetuned_models[dataset] 
-            del ft_state_dict 
-            
-            if self.device.type == "cuda":
-                torch.cuda.empty_cache()
-
-        svd_dict = get_svd_dict(
-            task_dicts, datasets, self.svd_path, self.svd_compress_factor
-        )
-
-        # Ensure reference state dict is on the right device
-        ref_state_dict = {k: v.to(self.device) for k, v in base_model.state_dict().items()}
-
-        multi_task_vector = avg_layers(
-            ref_state_dict=ref_state_dict,
-            svd_dict=svd_dict,
-        )
-        list_layer = [ key for key in  multi_task_vector]
-        masses = {key : 0.5 for key in  multi_task_vector}
-        module_net = build_clip_vit_network_module (list_layer,copy.deepcopy(multi_task_vector), masses)
-        module_vec = flatten_and_move_to_device(module_net['network'].get_dualitymap()())
-        for key in module_vec:
-            multi_task_vector[key] = module_vec[key]
         model_name = self.model_name
         coefficient = 1.0 
 
