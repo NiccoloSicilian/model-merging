@@ -1,7 +1,7 @@
 core:
-  project_name: model_merging
+  project_name: dual-merging
   storage_dir: ${oc.env:PROJECT_ROOT}/storage
-  entity: gladia
+  entity: siciliano-1958541
   version: 0.0.1
   tags: 
   - dev
