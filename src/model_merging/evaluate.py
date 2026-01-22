@@ -24,7 +24,6 @@ from nn_core.model_logging import NNLogger
 from model_merging.utils import linear_interpolate
 
 pylogger = logging.getLogger(__name__)
-wandb.login(key="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")
 
 def evaluate_pair_of_models(
     models,
