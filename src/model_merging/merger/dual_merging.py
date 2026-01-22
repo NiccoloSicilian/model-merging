@@ -434,6 +434,7 @@ class DualMerger(TaskVectorBasedMerger):
         module_net = build_clip_vit_network_module (list_layer,copy.deepcopy(multi_task_vector), masses)
         module_vec = flatten_and_move_to_device(module_net['network'].get_dualitymap()())
         for key in module_vec:
+            print(key)
             multi_task_vector[key] = module_vec[key]
         model_name = self.model_name
         coefficient = 1.0 
