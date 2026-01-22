@@ -148,7 +148,7 @@ def compose(M2, M1):
 import random
 def build_clip_vit_network_module(layer_names, grads, masses):
     """
-    Build a modular duality network for CLIP ViT-B-16.
+    Build a modular duality network for CLIP ViT.
     
     Architecture:
     - Visual encoder: conv1 → 12 transformer blocks → projection
@@ -164,7 +164,6 @@ def build_clip_vit_network_module(layer_names, grads, masses):
     module_map = {}
     
     print("\n" + "="*80)
-    print("Building CLIP ViT-B-16 Network Module")
     print("="*80)
     
     # ========================================================================
