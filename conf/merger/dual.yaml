@@ -10,12 +10,12 @@ optimal_alphas:
     14: 1.20
     20: 1.00
   ViT-L-14:
-    8: 1.70
+    8: 3.2
     14: 1.50
     20: 1.20
 
 svd_path: "${oc.env:MODELS_PATH}svd_dict_${nn.encoder.model_name}.pt"
 #svd_compress_factor: 16.5
-svd_compress_factor: null
+svd_compress_factor: 1.0
 device: ${device}
 model_name: ${nn.encoder.model_name}
