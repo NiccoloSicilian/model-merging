@@ -184,7 +184,7 @@ def build_clip_vit_network_module(layer_names, grads, masses):
         
         # Visual projection
         elif 'visual.proj' in name and 'out_proj' not in name:
-            #module_map['visual_proj'] = create_linear_mod(grads[name], name,mass)
+            module_map['visual_proj'] = create_linear_mod(grads[name], name,mass)
             print(f"✓ visual_proj: Linear module")
         
         # Visual positional embedding
@@ -202,7 +202,7 @@ def build_clip_vit_network_module(layer_names, grads, masses):
         
         # Text projection
         elif 'text_projection' in name:
-            #module_map['text_projection'] = create_linear_mod(grads[name],name,mass)
+            module_map['text_projection'] = create_linear_mod(grads[name],name,mass)
             print(f"✓ text_projection: Linear module")
         
         # Visual transformer blocks
