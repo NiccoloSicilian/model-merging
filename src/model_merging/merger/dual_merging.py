@@ -110,7 +110,7 @@ def create_conv2d_mod(g, name, mass):
 
 def create_embedding_mod(g, name,mass):
     def embedding_dualize():
-        rms_norm = torch.sqrt(torch.mean(g ** 2, dim=0, keepdim=True))
+        rms_norm = torch.sqrt(torch.mean(g ** 2, dim=1, keepdim=True))
         return {name: g / rms_norm}
     M = Module(mass, 1, embedding_dualize)
     return M
