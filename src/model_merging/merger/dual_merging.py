@@ -344,8 +344,20 @@ def build_clip_vit_network_module(layer_names, grads, masses):
     module_map['visual_backbone'] = visual_backbone
     print(f"✓ visual_backbone = visual_transformer ∘ conv1")
     print(f"  Mass: {visual_backbone.get_mass():.2f}")
-    
+
     # Add projection if it exists
+    if 'token_embedding' in module_map:
+        visual_encoder = compose(
+            module_map['token_embedding'],  # M2 (applied second)
+            visual_backbone             # M1 (applied first)
+        )
+        module_map['visual_encoder'] = visual_encoder
+        print(f"✓ visual_encoder = token_emb ∘ visual_backbone")
+        print(f"  Mass: {visual_encoder.get_mass():.2f}")
+    elif:
+        module_map['visual_encoder'] = visual_backbone 
+        print("No token emb")
+        
     if 'visual_proj' in module_map:
         visual_encoder = compose(
             module_map['visual_proj'],  # M2 (applied second)
@@ -355,7 +367,6 @@ def build_clip_vit_network_module(layer_names, grads, masses):
         print(f"✓ visual_encoder = visual_proj ∘ visual_backbone")
         print(f"  Mass: {visual_encoder.get_mass():.2f}")
     else:
-        module_map['visual_encoder'] = visual_backbone
         print(f"⚠ No visual_proj found, using backbone as encoder")
     
     # ========================================================================
