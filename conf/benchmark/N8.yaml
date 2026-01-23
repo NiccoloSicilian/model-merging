@@ -1,9 +1,9 @@
 datasets:
-  - ${dataset:"SUN397"} 
-  - ${dataset:"Cars"}
-  - ${dataset:"RESISC45"}
-  - ${dataset:"EuroSAT"}
-  - ${dataset:"SVHN"}
-  - ${dataset:"GTSRB"}
-  - ${dataset:"MNIST"}
-  - ${dataset:"DTD"}
+  - ${dataset:"MNIST"}     # ~15-50 MB (28x28 grayscale, 70k images)
+  - ${dataset:"EuroSAT"}   # ~100-200 MB (64x64 satellite, 27k images)
+  - ${dataset:"SVHN"}      # ~400-500 MB (32x32 cropped, ~100k images)
+  - ${dataset:"GTSRB"}     # ~600 MB (Variable res traffic signs, ~50k images)
+  - ${dataset:"DTD"}       # ~620 MB (Textures, 5.6k images)
+  - ${dataset:"Cars"}      # ~2 GB (Stanford Cars, 16k images)
+  - ${dataset:"RESISC45"}  # ~6-8 GB (256x256 satellite, 31.5k images)
+  - ${dataset:"SUN397"}    # ~39 GB (Scene recognition, ~108k high-res images)
