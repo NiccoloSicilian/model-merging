@@ -189,7 +189,7 @@ def build_clip_vit_network_module(layer_names, grads, masses):
         
         # Visual positional embedding
         elif 'visual.positional_embedding' in name:
-            #module_map['visual_positional_embedding'] = create_embedding_mod(grads[name],name,mass)
+            module_map['visual_positional_embedding'] = create_linear_mod(grads[name],name,mass)
             print(f"✓ visual.positional_embedding: Embedding module")
         
         # Text token embedding
