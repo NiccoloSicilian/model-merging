@@ -344,9 +344,9 @@ def build_clip_vit_network_module(layer_names, grads, masses):
         print("⚠ ERROR: visual_conv1 not found!")
         return module_map
     visual_pre_transf = visual_pre_tran_layers[0]
-    for l in range(len(visual_pre_tran_layer[:-1])):
+    for l in range(len(visual_pre_tran_layers[:-1])):
         visual_pre_transf = compose(
-            visual_pre_tran_layer[l+1],
+            visual_pre_tran_layers[l+1],
             visual_pre_transf
         )
     
