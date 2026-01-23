@@ -359,14 +359,6 @@ def build_clip_vit_network_module(layer_names, grads, masses):
     
     print(f"✓ visual_backbone = visual_transformer ∘ conv1")
     print(f"  Mass: {visual_backbone.get_mass():.2f}")
-    '''
-    
-    if 'visual_proj' in module_map:
-        visual_backbone = compose(
-            visual_backbone,
-            module_map['visual_proj']
-        )
-    '''
     # Add projection if it exists
     if 'visual_proj' in module_map:
         visual_encoder = compose(
