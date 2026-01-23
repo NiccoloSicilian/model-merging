@@ -184,7 +184,7 @@ def build_clip_vit_network_module(layer_names, grads, masses):
         
         # Visual projection
         elif 'visual.proj' in name and 'out_proj' not in name:
-            module_map['visual_proj'] = create_linear_mod(grads[name], name,mass)
+            #module_map['visual_proj'] = create_linear_mod(grads[name], name,mass)
             print(f"✓ visual_proj: Linear module")
         
         # Visual positional embedding
@@ -344,30 +344,19 @@ def build_clip_vit_network_module(layer_names, grads, masses):
     module_map['visual_backbone'] = visual_backbone
     print(f"✓ visual_backbone = visual_transformer ∘ conv1")
     print(f"  Mass: {visual_backbone.get_mass():.2f}")
-    visual_encoder = visual_backbone 
 
-    if 'visual_proj' in module_map:
-        visual_encoder = compose(
-            module_map['visual_proj'],  # M2 (applied second)
-            visual_backbone            # M1 (applied first)
-        )
-        module_map['visual_encoder'] = visual_encoder
-        print(f"✓ visual_encoder = visual_proj ∘ visual_backbone")
-        print(f"  Mass: {visual_encoder.get_mass():.2f}")
-    else:
-        module_map['visual_encoder'] = visual_encoder
-        
-        print(f"⚠ No visual_proj found, using backbone as encoder")
+    
     # Add projection if it exists
     if 'token_embedding' in module_map:
-        visual_encoder2 = compose(
+        visual_encoder = compose(
             module_map['token_embedding'],  # M2 (applied second)
-            visual_encoder             # M1 (applied first)
+            visual_backbone             # M1 (applied first)
         )
-        module_map['visual_encoder'] = visual_encoder2
+        module_map['visual_encoder'] = visual_encoder
         print(f"✓ visual_encoder = token_emb ∘ visual_backbone")
         print(f"  Mass: {visual_encoder.get_mass():.2f}")
     else:
+        module_map['visual_encoder'] = visual_backbone
         print("No token emb")
         
     
