@@ -152,7 +152,7 @@ def run(cfg: DictConfig) -> str:
                 dataset_cfg.name + "Val" if cfg.eval_on_train else dataset_cfg.name
             ]
         )
-
+        print(model.visual.positional_embedding.requires_grad)
         callbacks: List[Callback] = build_callbacks(cfg.train.callbacks, template_core)
 
         trainer = pl.Trainer(
