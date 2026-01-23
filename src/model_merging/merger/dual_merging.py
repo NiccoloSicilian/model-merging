@@ -354,7 +354,7 @@ def build_clip_vit_network_module(layer_names, grads, masses):
         module_map['visual_encoder'] = visual_encoder
         print(f"✓ visual_encoder = token_emb ∘ visual_backbone")
         print(f"  Mass: {visual_encoder.get_mass():.2f}")
-    elif:
+    else:
         module_map['visual_encoder'] = visual_backbone 
         print("No token emb")
         
