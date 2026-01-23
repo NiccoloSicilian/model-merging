@@ -367,6 +367,8 @@ def build_clip_vit_network_module(layer_names, grads, masses):
             visual_backbone,
             module_map['visual_proj']
         )
+    '''
+        
     # Add projection if it exists
     if 'token_embedding' in module_map:
         visual_encoder = compose(
@@ -378,8 +380,6 @@ def build_clip_vit_network_module(layer_names, grads, masses):
         print(f"  Mass: {visual_encoder.get_mass():.2f}")
     else:
         print("No token emb")
-    '''
-    module_map['visual_encoder'] = visual_backbone
         
         
     
