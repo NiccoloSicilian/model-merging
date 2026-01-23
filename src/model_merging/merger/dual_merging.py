@@ -194,7 +194,7 @@ def build_clip_vit_network_module(layer_names, grads, masses):
         
         # Text token embedding
         elif 'token_embedding.weight' in name:
-            #module_map['token_embedding'] = create_embedding_mod(grads[name],name,mass)
+            module_map['token_embedding'] = create_embedding_mod(grads[name],name,mass)
             print(f"✓ token_embedding: Embedding module")
         
         # Text positional embedding
@@ -380,8 +380,7 @@ def build_clip_vit_network_module(layer_names, grads, masses):
         print(f"  Mass: {visual_encoder.get_mass():.2f}")
     else:
         print("No token emb")
-        
-        
+        module_map['visual_encoder'] = visual_backbone
     
     
     # ========================================================================
