@@ -190,7 +190,7 @@ def build_clip_vit_network_module(layer_names, grads, masses):
         # Visual positional embedding
         elif 'visual.positional_embedding' in name:
             module_map['visual_positional_embedding'] = create_embedding_mod(grads[name],name,mass)
-            print(f"⊗ visual.positional_embedding: SKIPPED (parameter)")
+            print(f"✓ visual.positional_embedding: Embedding module")
         
         # Text token embedding
         elif 'token_embedding.weight' in name:
@@ -334,11 +334,11 @@ def build_clip_vit_network_module(layer_names, grads, masses):
     print("="*80)
     visual_pre_tran_layers = []
     if 'visual_positional_embedding' in module_map:
-        
         visual_pre_tran_layers.append(module_map['visual_positional_embedding'])
-    elif 'visual_proj' in module_map:
+    if 'visual_proj' in module_map:
         visual_pre_tran_layers.append(module_map['visual_proj'])
-    elif 'visual_conv1' in module_map:
+        
+    if 'visual_conv1' in module_map:
         visual_pre_tran_layers.append(module_map['visual_conv1'])
     else:   
         print("⚠ ERROR: visual_conv1 not found!")
