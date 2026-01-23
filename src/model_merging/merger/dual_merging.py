@@ -37,7 +37,7 @@ def scale_nested(scalar, data):
         raise TypeError(f"Unsupported type: {type(data)}")
 import torch
 
-def flatten_and_move_to_device(nested, device='cuda:0', clone=True):
+def flatten_and_move_to_device(nested, device='cuda:0', clone=False):  # Changed default to False
     """
     Recursively flatten nested tuples of dictionaries into a single dictionary,
     move all tensors to the specified device, optionally clone them.
@@ -49,7 +49,7 @@ def flatten_and_move_to_device(nested, device='cuda:0', clone=True):
             if clone:
                 flat_dict[k] = v.clone().to(device)
             else:
-                flat_dict[k] = v.to(device)
+                flat_dict[k] = v.to(device) if v.device != device else v
     elif isinstance(nested, tuple):
         for item in nested:
             flat_dict.update(flatten_and_move_to_device(item, device, clone))
@@ -403,43 +403,23 @@ def build_clip_vit_network_module(layer_names, grads, masses):
 # Keep your existing imports...
 # from ... import TaskVectorBasedMerger, compute_task_dict, get_svd_dict, isotropic_sum, apply_dict_to_model
 class DualMerger(TaskVectorBasedMerger):
-
-    def __init__(self, optimal_alphas, svd_path, svd_compress_factor,model_name, device=None):
-        super().__init__()
-        self.optimal_alphas = optimal_alphas
-        self.svd_path = svd_path
-        self.svd_compress_factor = svd_compress_factor
-        self.model_name = model_name
-        # IGNORE the 'device' argument passed by Hydra.
-        # Auto-detect: Use GPU if available, else CPU.
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print(f"🚀 IsotropicMerger initialized on device: {self.device}")
     @torch.no_grad()
     def merge(self, base_model, finetuned_models):
-        # 1. Move base model to the auto-detected device
         base_model = base_model.to(self.device)
 
         task_dicts = {}
         datasets = list(finetuned_models.keys())
-        
-        # Calculate this BEFORE deleting items
-        num_tasks = len(datasets) 
+        num_tasks = len(datasets)
 
         for dataset in datasets:
-            # 2. Move the finetuned state_dict to device manually
-            # (finetuned_models[dataset] is an OrderedDict, not a Module)
             ft_state_dict = {
                 k: v.to(self.device) for k, v in finetuned_models[dataset].items()
             }
-
             task_dicts[dataset] = compute_task_dict(
                 base_model.state_dict(), ft_state_dict
             )
-            
-            # Cleanup to save VRAM
-            del finetuned_models[dataset] 
-            del ft_state_dict 
-            
+            del finetuned_models[dataset]
+            del ft_state_dict
             if self.device.type == "cuda":
                 torch.cuda.empty_cache()
 
@@ -447,23 +427,42 @@ class DualMerger(TaskVectorBasedMerger):
             task_dicts, datasets, self.svd_path, self.svd_compress_factor
         )
 
-        # Ensure reference state dict is on the right device
         ref_state_dict = {k: v.to(self.device) for k, v in base_model.state_dict().items()}
 
         multi_task_vector = avg_layers(
             ref_state_dict=ref_state_dict,
             svd_dict=svd_dict,
         )
-        list_layer = [ key for key in  multi_task_vector]
-        masses = {key : 0.5 for key in  multi_task_vector}
-        module_net = build_clip_vit_network_module (list_layer,copy.deepcopy(multi_task_vector), masses)
-        module_vec = flatten_and_move_to_device(module_net['network'].get_dualitymap()())
-        print(module_vec.keys(), multi_task_vector.keys())
+        
+        list_layer = list(multi_task_vector.keys())
+        masses = {key: 0.5 for key in multi_task_vector}
+        
+        # CRITICAL FIX: Don't deep copy - just pass the reference
+        # The module network will compute duality maps without modifying the original
+        module_net = build_clip_vit_network_module(list_layer, multi_task_vector, masses)
+        
+        # Get the duality map and apply it
+        module_vec = flatten_and_move_to_device(
+            module_net['network'].get_dualitymap()(), 
+            device=self.device,
+            clone=False  # Don't clone unless necessary
+        )
+        
+        # Clear the module network from memory
+        del module_net
+        if self.device.type == "cuda":
+            torch.cuda.empty_cache()
+        
+        # Update multi_task_vector in-place
         for key in module_vec:
-            print(key)
             multi_task_vector[key] = module_vec[key]
+        
+        del module_vec
+        if self.device.type == "cuda":
+            torch.cuda.empty_cache()
+
         model_name = self.model_name
-        coefficient = 1.0 
+        coefficient = 1.0
 
         if (
             model_name in self.optimal_alphas
