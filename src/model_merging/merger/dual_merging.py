@@ -194,8 +194,8 @@ def build_clip_vit_network_module(layer_names, grads, masses):
         
         # Text token embedding
         elif 'token_embedding.weight' in name:
-            module_map['token_embedding'] = create_embedding_mod(grads[name],name,mass)
-            print(f"✓ token_embedding: Embedding module")
+            #module_map['token_embedding'] = create_embedding_mod(grads[name],name,mass)
+            print(f"⊗ token_embedding: SKIPPED (parameter)")
         
         # Text positional embedding
         elif 'positional_embedding' in name and 'visual' not in name:
