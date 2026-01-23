@@ -173,6 +173,7 @@ def build_clip_vit_network_module(layer_names, grads, masses):
     print("Step 1: Creating Atomic Layer Modules")
     print("="*80)
     for name in layer_names:
+        print(name)
         # Skip biases, layer norms, and non-trainable parameters
         if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
             continue
