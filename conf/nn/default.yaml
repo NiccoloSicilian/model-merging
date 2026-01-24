@@ -1,4 +1,4 @@
 defaults:
   - _self_
   - module: default
-  - encoder: vitb14
+  - encoder: b32
