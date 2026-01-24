@@ -2,6 +2,12 @@
 # Wang et al. Localizing Task Information for Improved Model Merging and Compression
 # http://arxiv.org/abs/2405.07813
 datasets:
+  - ${dataset:"Flowers102"}
+  - ${dataset:"PCAM"}
+  - ${dataset:"FER2013"}
+  - ${dataset:"OxfordIIITPet"}
+  - ${dataset:"STL10"}
+  - ${dataset:"CIFAR100"}
   - ${dataset:"SUN397"}
   - ${dataset:"Cars"}
   - ${dataset:"RESISC45"}
@@ -11,9 +17,4 @@ datasets:
   - ${dataset:"MNIST"}
   - ${dataset:"DTD"}
   # end of 8 tasks
-  - ${dataset:"Flowers102"}
-  - ${dataset:"PCAM"}
-  - ${dataset:"FER2013"}
-  - ${dataset:"OxfordIIITPet"}
-  - ${dataset:"STL10"}
-  - ${dataset:"CIFAR100"}
+  
