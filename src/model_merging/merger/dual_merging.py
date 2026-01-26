@@ -402,7 +402,7 @@ class DualMerger(TaskVectorBasedMerger):
             gc.collect()
         
         list_layer = [key for key in multi_task_vector_cpu]
-        masses = {key: 0.25 for key in multi_task_vector_cpu}
+        masses = {key: 0.5 for key in multi_task_vector_cpu}
         
         # Build network on CPU
         module_net = build_clip_vit_network_module(list_layer, multi_task_vector_cpu, masses)
