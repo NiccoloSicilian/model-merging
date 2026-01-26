@@ -11,7 +11,7 @@ optimal_alphas:
     20: 1.00
   ViT-L-14:
     8: 3.0
-    14: 3.8
+    14: 1.6
     20: 1.20
 
 svd_path: "${oc.env:MODELS_PATH}svd_dict_${nn.encoder.model_name}.pt"
