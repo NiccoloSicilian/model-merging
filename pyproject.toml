@@ -4,7 +4,7 @@ description = "Utils and methods for weight-space merging."
 dynamic = ["version"]
 readme = "README.md"
 license = { file = "LICENSE" }
-requires-python = "== 3.11.8"
+requires-python = "== 3.11.7"
 dependencies = [
     "aiohttp==3.9.3",
     "uv==0.7.3",
