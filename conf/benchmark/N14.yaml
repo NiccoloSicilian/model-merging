@@ -2,6 +2,8 @@
 # Wang et al. Localizing Task Information for Improved Model Merging and Compression
 # http://arxiv.org/abs/2405.07813
 datasets:
+  - ${dataset:"SVHN"}
+
   - ${dataset:"SUN397"}
   - ${dataset:"Cars"}
   - ${dataset:"RESISC45"}
@@ -16,7 +18,6 @@ datasets:
   - ${dataset:"OxfordIIITPet"}
   - ${dataset:"STL10"}
   - ${dataset:"CIFAR100"}
-  - ${dataset:"SVHN"}
   
   # end of 8 tasks
   
