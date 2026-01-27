@@ -4,5 +4,5 @@ ft_epochs: 5
 preprocess_fn: ??
 hf_dataset: 
   _target_: datasets.load_dataset
-  path: mnist
+  path: ylecun/mnist
 
