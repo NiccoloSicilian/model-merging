@@ -5,5 +5,4 @@ preprocess_fn: ???
 hf_dataset: 
   _target_: datasets.load_dataset
   _args_:
-    - svhn
-    - cropped_digits
+    - Genius-Society/svhn
