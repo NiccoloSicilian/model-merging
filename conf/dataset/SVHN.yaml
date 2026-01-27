@@ -7,3 +7,4 @@ hf_dataset:
   _target_: datasets.load_dataset
   _args_:
     - ufldl-stanford/svhn 
+    - cropped_digits
