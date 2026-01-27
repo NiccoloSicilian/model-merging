@@ -3,13 +3,12 @@
 # http://arxiv.org/abs/2405.07813
 datasets:
   - ${dataset:"SVHN"}
-
+  - ${dataset:"MNIST"}
   - ${dataset:"SUN397"}
   - ${dataset:"Cars"}
   - ${dataset:"RESISC45"}
   - ${dataset:"EuroSAT"}
   - ${dataset:"GTSRB"}
-  - ${dataset:"MNIST"}
   - ${dataset:"DTD"}
   # end of 8 tasks
   - ${dataset:"Flowers102"}
