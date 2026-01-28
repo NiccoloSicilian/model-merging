@@ -30,6 +30,7 @@ def scale_nested(scalar, data):
     """
     if isinstance(data, dict):
         result = {}
+        print(data)
         for k in data:
             result[k] = data[k] * scalar
         return result
