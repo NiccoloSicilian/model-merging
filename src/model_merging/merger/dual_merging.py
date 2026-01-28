@@ -340,7 +340,6 @@ class DualMerger(TaskVectorBasedMerger):
             multi_task_vector_cpu[key] = module_vec_flat[key].to(self.device)
         
         del module_vec_flat
-        del module_vec_cpu
         gc.collect()
             
         model_name = self.model_name
