@@ -156,6 +156,8 @@ def compose(M2, M1):
         sensitivity_factor = 1.0 / M2.get_sensitivity()
         ratio1 = M1.get_mass() / M.get_mass()
         ratio2 = M2.get_mass() / M.get_mass()
+        print(f"  Compose ratios: ratio1={ratio1:.4f}, ratio2={ratio2:.4f}, total_mass={M.get_mass():.2f}")
+        
         g1 = M1.get_dualitymap()()
         g2 = M2.get_dualitymap()()
         result = (scale_nested(sensitivity_factor * ratio1, g1),
