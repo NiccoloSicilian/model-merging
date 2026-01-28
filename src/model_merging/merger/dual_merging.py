@@ -427,7 +427,7 @@ class DualMerger(TaskVectorBasedMerger):
         
         ref_keys = list(base_model.state_dict().keys())
         ordered_keys = [k for k in ref_keys if k in multi_task_vector_cpu]
-        masses = mass_schedule(oredered_keys)
+        masses = mass_schedule(ordered_keys)
         
         # Build network on CPU
         module_net = build_clip_vit_network_module(ordered_keys, multi_task_vector_cpu, masses)
