@@ -218,10 +218,21 @@ def build_duality_map(layer_names, grads, masses):
 
 def mass_schedule(multi_task_vector_cpu):
     schedule = {}
-    
+    mass = 0.5 +0.028
+    block_id = 'n'
     for i, key in enumerate(multi_task_vector_cpu):
-        # Assign the current mass
-        schedule[key] =0.5
+        if 'resblock' in key:
+            if key.split('resblocks.')[1].split('.')[0] == block_id: 
+                schedule[key] = mass
+            else:
+                mass -= 0.028
+                block_id = key.split('resblocks.')[1].split('.')[0]
+                schedule[key] =mass
+                
+        else:
+            mass -= 0.028
+            schedule[key] =mass
+            
         
     return schedule
 
