@@ -24,133 +24,208 @@ import torch
 import copy
 from pathlib import Path
 
+import torch
+from math import sqrt
 
 def linear_mod(g, name):
-    # Move to CPU immediately for SVD
+    """Apply Linear layer duality map (RMS→RMS operator norm)"""
     g_cpu = g.cpu()
-    
- 
     U, S, Vt = torch.linalg.svd(g_cpu, full_matrices=False)
     result = U @ Vt * sqrt(g_cpu.shape[0] / g_cpu.shape[1])
-    # Keep on CPU
     return {name: result}
 
 
-
 def conv2d_mod(g, name):
-    # Move to CPU immediately
+    """Apply Conv2D layer duality map (max RMS→RMS over kernel indices)"""
     g_cpu = g.cpu()
-
-
-    matrix = g_cpu
-    dout, din, k, _ = matrix.shape
+    dout, din, k, _ = g_cpu.shape
     
-    scaling_factor = (1.0 / k**2) * math.sqrt(dout / din)
-    transformed = torch.zeros_like(matrix)
+    scaling_factor = (1.0 / k**2) * sqrt(dout / din)
+    transformed = torch.zeros_like(g_cpu)
     
     for i in range(k):
         for j in range(k):
-            slice_matrix = matrix[:, :, i, j]
+            slice_matrix = g_cpu[:, :, i, j]
             U, S, Vt = torch.linalg.svd(slice_matrix, full_matrices=False)
-            reconstructed = U @ Vt
-            transformed[:, :, i, j] = scaling_factor * reconstructed
+            transformed[:, :, i, j] = scaling_factor * (U @ Vt)
     
     return {name: transformed}
 
+
 class Module:
-    def __init__(self, mass, sensitivity, name):
+    def __init__(self, mass, sensitivity, grads_dict, name):
+        """
+        grads_dict: dictionary {layer_name: dualized_gradient_tensor}
+        """
         self.mass = mass
         self.sensitivity = sensitivity
-        self.grads = []
+        self.grads = grads_dict  # Store as dict, not list
         self.name = name
     
-    def update_gradients(self, g):
-    	self.grads = g
-
+    def update_gradients(self, grads_dict):
+        self.grads = grads_dict
+    
     def set_mass(self, mass):
         self.mass = mass
-       
+    
     def get_mass(self):
         return self.mass
     
     def get_sensitivity(self):
         return self.sensitivity
-        
+    
     def get_gradients(self):
-    	return self.grads
+        return self.grads
+    
     def get_name(self):
-    	return self.name
-
-def mul_grad(g, scalar):
-	if len(g) == 1:
-		g[g.keys()[0]] *= scalar 
-		return g
-	else:
-		print("EROORORRORORORORORORO TOO MANY VALUES IN GRADIENTS DICT")
-	return None
-def compose(M2, M1): #M2 and M1 are Modules
-	M = Module(M2.get_mass() + M1.get_mass(), M1.get_sensitivity()*M2.get_sensitivity,  M2.get_name() +"("+M1.get_name()+")")
-	scalar_M2 = M2.get_mass()/M.get_mass()
-	scalar_M1 = (1/M2.get_sensitivity())* M1.get_mass()/M.get_mass() 
-
-	grads_dualized = []
-	if len(M2.get_gradients())> 1:
-		print("EROORORRORORORORORORO")
-	for g in M2.get_gradients():
-		grads_dualized.append(mul_grad(g, scalar_M2))
-
-	for g in M1.get_gradients():
-		grads_dualized.append(mul_grad(g, scalar_M1))
+        return self.name
 
 
-	M.update_gradients(grads_dualized)
+def scale_grad_dict(grad_dict, scalar):
+    """Multiply all tensors in gradient dictionary by scalar"""
+    return {name: tensor * scalar for name, tensor in grad_dict.items()}
+
+
+def merge_grad_dicts(dict1, dict2):
+    """Merge two gradient dictionaries"""
+    result = dict1.copy()
+    result.update(dict2)
+    return result
+
+
+def compose(M_later, M_earlier):
+    """
+    Compose M_later ∘ M_earlier (execution order: earlier → later)
+    
+    According to Equation (11) in the paper:
+    - M_earlier gradients scaled by: (1/M_later.sensitivity) * (M_earlier.mass / total_mass)
+    - M_later gradients scaled by: M_later.mass / total_mass
+    """
+    total_mass = M_earlier.get_mass() + M_later.get_mass()
+    composed_sensitivity = M_earlier.get_sensitivity() * M_later.get_sensitivity()
+    composed_name = f"{M_later.get_name()}∘{M_earlier.get_name()}"
+    
+    # Compute scaling factors (Equation 11)
+    sensitivity_factor = 1.0 / M_later.get_sensitivity()
+    ratio_earlier = M_earlier.get_mass() / total_mass
+    ratio_later = M_later.get_mass() / total_mass
+    
+    scalar_earlier = sensitivity_factor * ratio_earlier
+    scalar_later = ratio_later
+    
+    # Scale and merge gradients
+    scaled_grads_earlier = scale_grad_dict(M_earlier.get_gradients(), scalar_earlier)
+    scaled_grads_later = scale_grad_dict(M_later.get_gradients(), scalar_later)
+    
+    composed_grads = merge_grad_dicts(scaled_grads_earlier, scaled_grads_later)
+    
+    # Create composed module
+    M = Module(total_mass, composed_sensitivity, composed_grads, composed_name)
+    
+    print(f"  Composed: {M.get_name()}")
+    print(f"    Mass: {total_mass:.2f}, Sensitivity: {composed_sensitivity:.2f}")
+    print(f"    Scalars: earlier={scalar_earlier:.4f}, later={scalar_later:.4f}")
+    
     return M
 
-def build_duality_map(layer_names, grads, masses): # Assuming no concatenation
 
-	modules  = []
-	for name in layer_names:
-		if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
+def build_duality_map(layer_names, grads, masses):
+    """
+    Build modular duality map assuming layers are in execution order.
+    Applies composition sequentially: layer_N ∘ ... ∘ layer_1 ∘ layer_0
+    """
+    print("\n" + "="*80)
+    print("STEP 1: Creating Atomic Modules with Dualized Gradients")
+    print("="*80)
+    
+    modules = []
+    
+    for name in layer_names:
+        # Skip non-trainable parameters
+        if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
             continue
-
-		dm = None
-		# Visual conv1
+        
+        dm = None
+        
+        # Determine layer type and apply corresponding duality map
         if 'visual.conv1.weight' in name:
-            dm = conv2d_mod(grads[name])
-            print(f"✓ visual_conv1: Conv2D module")
+            dm = conv2d_mod(grads[name], name)
+            layer_type = "Conv2D"
         
-        # Visual projection
         elif 'visual.proj' in name and 'out_proj' not in name:
-            dm = linear_mod(grads[name])
-            print(f"✓ visual_proj: Linear module")
+            dm = linear_mod(grads[name], name)
+            layer_type = "Linear (visual proj)"
         
-        # Visual positional embedding
         elif 'visual.positional_embedding' in name:
-            dm = linear_mod(grads[name])
-            print(f"✓ visual.positional_embedding: Linear module")
+            dm = linear_mod(grads[name], name)
+            layer_type = "Linear (pos emb)"
         
-        # Visual transformer blocks
         elif 'visual.transformer.resblocks' in name and 'weight' in name:
             if 'attn.in_proj_weight' in name:
-                    dm = linear_mod(grads[name])
+                dm = linear_mod(grads[name], name)
+                layer_type = "Linear (attn in)"
             elif 'attn.out_proj.weight' in name:
-                    dm = linear_mod(grads[name])
+                dm = linear_mod(grads[name], name)
+                layer_type = "Linear (attn out)"
             elif 'mlp.c_fc.weight' in name:
-                    dm = linear_mod(grads[name])
+                dm = linear_mod(grads[name], name)
+                layer_type = "Linear (mlp fc)"
             elif 'mlp.c_proj.weight' in name:
-                    dm = linear_mod(grads[name])
-        if dm not None:
-        	module.append(Module(mass[name], 1.0, dm, name))
-       	else:
-       		print(name, "Ignored")
-
-    #COMPOSE
+                dm = linear_mod(grads[name], name)
+                layer_type = "Linear (mlp proj)"
+        
+        # Create module if duality map was computed
+        if dm is not None:
+            module = Module(masses[name], 1.0, dm, name)
+            modules.append(module)
+            print(f"✓ {name}: {layer_type} [Mass: {masses[name]:.2f}]")
+        else:
+            print(f"⚠ {name}: Ignored")
+    
+    # ========================================================================
+    print(f"\n{'='*80}")
+    print("STEP 2: Composing All Modules Sequentially")
+    print("="*80)
+    print(f"Total modules to compose: {len(modules)}")
+    print(f"Composition: {modules[-1].get_name()} ∘ ... ∘ {modules[0].get_name()}\n")
+    # ========================================================================
+    
+    if len(modules) == 0:
+        print("ERROR: No modules created!")
+        return None
+    
+    # Compose sequentially: later ∘ earlier
     composed = modules[0]
-   	for m in range(1,len(modules)):
-    	composed = compose(modules[m], composed)
+    print(f"Starting with: {composed.get_name()} [Mass: {composed.get_mass():.2f}]")
+    
+    for i in range(1, len(modules)):
+        composed = compose(modules[i], composed)  # modules[i] ∘ composed
+    
+    # ========================================================================
+    print(f"\n{'='*80}")
+    print("FINAL COMPOSED MODULE")
+    print(f"{'='*80}")
+    print(f"Name:        {composed.get_name()}")
+    print(f"Total Mass:  {composed.get_mass():.2f}")
+    print(f"Sensitivity: {composed.get_sensitivity():.2f}")
+    print(f"Gradients:   {len(composed.get_gradients())} layers")
+    print(f"{'='*80}\n")
+    
+    # Return the dictionary of all dualized gradients
+    return composed.get_gradients()
 
-    print(composed)
-    return flat_composed
+
+# Example usage:
+if __name__ == "__main__":
+    # Assuming you have:
+    # layer_names: list of layer names in execution order
+    # grads: dict mapping layer_name -> gradient tensor
+    # masses: dict mapping layer_name -> mass value
+    
+    dualized_grads = build_duality_map(layer_names, grads, masses)
+    
+    # dualized_grads is now a dict: {layer_name: dualized_gradient_tensor}
+    # You can use these to update your model parameters
 
 def mass_schedule(multi_task_vector_cpu):
     schedule = {}
