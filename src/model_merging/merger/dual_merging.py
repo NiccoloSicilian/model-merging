@@ -477,6 +477,7 @@ class DualMerger(TaskVectorBasedMerger):
         masses = mass_schedule(ordered_keys)
         print(ordered_keys)
         module_net = build_clip_vit_network_module(ordered_keys, multi_task_vector_cpu, masses)
+        print(module_net['network'].get_dualitymap()())
         # Get dualized vectors (already on CPU)
         module_vec_cpu = module_net['network'].get_dualitymap()()
         module_vec_flat = flatten_and_move_to_device(
