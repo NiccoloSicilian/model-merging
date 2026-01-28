@@ -346,7 +346,31 @@ def build_clip_vit_network_module(layer_names, grads, masses):
     print(f"{'='*80}")
     
     return module_map
+def mass_schedule(multi_task_vector_cpu):
+    schedule = {}
+    
+    # Requirement: First layer is strictly 1.0
+    current_mass = 1.0
+    
+    # Calculate how much to decrease per layer to reach a target (e.g., 0.1) by the end
+    # You can adjust 'target_low_mass' to control how fast it decreases.
+    target_low_mass = 0.1 
+    total_layers = len(multi_task_vector_cpu)
+    
+    # Avoid division by zero if there's only one layer
+    if total_layers > 1:
+        decrement = (current_mass - target_low_mass) / (total_layers - 1)
+    else:
+        decrement = 0.0
 
+    for i, key in enumerate(multi_task_vector_cpu):
+        # Assign the current mass
+        schedule[key] = current_mass
+        
+        # Decrease for the NEXT layer
+        current_mass -= decrement
+        
+    return schedule
 
 class DualMerger(TaskVectorBasedMerger):
 
@@ -402,7 +426,7 @@ class DualMerger(TaskVectorBasedMerger):
             gc.collect()
         
         list_layer = [key for key in multi_task_vector_cpu]
-        masses = {key: 0.5 for key in multi_task_vector_cpu}
+        masses = mass_schedule(multi_task_vector_cpu)
         
         # Build network on CPU
         module_net = build_clip_vit_network_module(list_layer, multi_task_vector_cpu, masses)
