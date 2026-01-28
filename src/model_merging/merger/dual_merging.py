@@ -139,7 +139,7 @@ def build_duality_map(layer_names, grads):
     print("="*80)
     
     modules = []
-    current_mass = 0.5 +0.028
+    current_mass = 0.1
     block_id = 'n'
     
     for name in layer_names:
@@ -153,17 +153,17 @@ def build_duality_map(layer_names, grads):
         if 'visual.conv1.weight' in name:
             dm = conv2d_mod(grads[name], name)
             layer_type = "Conv2D"
-            current_mass -= 0.028
+            current_mass += 0.026
             mass = current_mass
         elif 'visual.proj' in name and 'out_proj' not in name:
             dm = linear_mod(grads[name], name)
             layer_type = "Linear (visual proj)"
-            current_mass -= 0.028
+            current_mass += 0.026
             mass = current_mass
         elif 'visual.positional_embedding' in name:
             dm = linear_mod(grads[name], name)
             layer_type = "Linear (pos emb)"
-            current_mass -= 0.028
+            current_mass += 0.026
             mass = current_mass
         elif 'visual.transformer.resblocks' in name and 'weight' in name:
             
@@ -182,11 +182,11 @@ def build_duality_map(layer_names, grads):
                 layer_type = "Linear (mlp proj)"
 
             if 'attn.in_proj_weight' in name or 'attn.out_proj.weight' in name or 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight':
-                if key.split('resblocks.')[1].split('.')[0] == block_id: 
+                if name.split('resblocks.')[1].split('.')[0] == block_id: 
                     mass = current_mass
                 else:
-                    current_mass -= 0.028
-                    block_id = key.split('resblocks.')[1].split('.')[0]
+                    current_mass += 0.026
+                    block_id = name.split('resblocks.')[1].split('.')[0]
                     mass =current_mass
         
         # Create module if duality map was computed
