@@ -129,7 +129,7 @@ def compose(M_later, M_earlier):
     return M
 
 
-def build_duality_map(layer_names, grads, masses):
+def build_duality_map(layer_names, grads):
     """
     Build modular duality map assuming layers are in execution order.
     Applies composition sequentially: layer_N ∘ ... ∘ layer_1 ∘ layer_0
@@ -139,6 +139,8 @@ def build_duality_map(layer_names, grads, masses):
     print("="*80)
     
     modules = []
+    current_mass = 0.5 +0.028
+    block_id = 'n'
     
     for name in layer_names:
         # Skip non-trainable parameters
@@ -151,16 +153,21 @@ def build_duality_map(layer_names, grads, masses):
         if 'visual.conv1.weight' in name:
             dm = conv2d_mod(grads[name], name)
             layer_type = "Conv2D"
-        
+            current_mass -= 0.028
+            mass = current_mass
         elif 'visual.proj' in name and 'out_proj' not in name:
             dm = linear_mod(grads[name], name)
             layer_type = "Linear (visual proj)"
-        
+            current_mass -= 0.028
+            mass = current_mass
         elif 'visual.positional_embedding' in name:
             dm = linear_mod(grads[name], name)
             layer_type = "Linear (pos emb)"
-        
+            current_mass -= 0.028
+            mass = current_mass
         elif 'visual.transformer.resblocks' in name and 'weight' in name:
+            
+                
             if 'attn.in_proj_weight' in name:
                 dm = linear_mod(grads[name], name)
                 layer_type = "Linear (attn in)"
@@ -173,12 +180,20 @@ def build_duality_map(layer_names, grads, masses):
             elif 'mlp.c_proj.weight' in name:
                 dm = linear_mod(grads[name], name)
                 layer_type = "Linear (mlp proj)"
+
+            if 'attn.in_proj_weight' in name or 'attn.out_proj.weight' in name or 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight':
+                if key.split('resblocks.')[1].split('.')[0] == block_id: 
+                    mass = current_mass
+                else:
+                    current_mass -= 0.028
+                    block_id = key.split('resblocks.')[1].split('.')[0]
+                    mass =current_mass
         
         # Create module if duality map was computed
         if dm is not None:
-            module = Module(masses[name], 1.0, dm, name)
+            module = Module(mass, 1.0, dm, name)
             modules.append(module)
-            print(f"✓ {name}: {layer_type} [Mass: {masses[name]:.2f}]")
+            print(f"✓ {name}: {layer_type} [Mass: {mass:.2f}]")
         else:
             print(f"⚠ {name}: Ignored")
     
@@ -215,26 +230,6 @@ def build_duality_map(layer_names, grads, masses):
     return composed.get_gradients()
 
 
-
-def mass_schedule(multi_task_vector_cpu):
-    schedule = {}
-    mass = 0.5 +0.028
-    block_id = 'n'
-    for i, key in enumerate(multi_task_vector_cpu):
-        if 'resblock' in key:
-            if key.split('resblocks.')[1].split('.')[0] == block_id: 
-                schedule[key] = mass
-            else:
-                mass -= 0.028
-                block_id = key.split('resblocks.')[1].split('.')[0]
-                schedule[key] =mass
-                
-        else:
-            mass -= 0.028
-            schedule[key] =mass
-            
-        
-    return schedule
 
 def get_vit_topological_order(keys):
     """
@@ -338,9 +333,8 @@ class DualMerger(TaskVectorBasedMerger):
         raw_keys = list(multi_task_vector_cpu.keys())
         ordered_keys = get_vit_topological_order(raw_keys)
         
-        masses = mass_schedule(ordered_keys)
         print(ordered_keys)
-        module_net = build_duality_map(ordered_keys, multi_task_vector_cpu, masses)
+        module_net = build_duality_map(ordered_keys, multi_task_vector_cpu)
         # Get dualized vectors (already on CPU)
         
         module_vec_flat = module_net
