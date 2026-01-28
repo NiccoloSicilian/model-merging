@@ -425,11 +425,12 @@ class DualMerger(TaskVectorBasedMerger):
             torch.cuda.empty_cache()
             gc.collect()
         
-        list_layer = [key for key in multi_task_vector_cpu]
-        masses = mass_schedule(multi_task_vector_cpu)
+        ref_keys = list(base_model.state_dict().keys())
+        ordered_keys = [k for k in ref_keys if k in multi_task_vector_cpu]
+        masses = mass_schedule(oredered_keys)
         
         # Build network on CPU
-        module_net = build_clip_vit_network_module(list_layer, multi_task_vector_cpu, masses)
+        module_net = build_clip_vit_network_module(ordered_keys, multi_task_vector_cpu, masses)
         
         # Get dualized vectors (already on CPU)
         module_vec_cpu = module_net['network'].get_dualitymap()()
