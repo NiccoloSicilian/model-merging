@@ -24,331 +24,134 @@ import torch
 import copy
 from pathlib import Path
 
-def scale_nested(scalar, data):
-    """
-    Recursively multiply a scalar with a tensor or nested tuple of tensors.
-    """
-    if isinstance(data, dict):
-        result = {}
-        print(data)
-        for k in data:
-            result[k] = data[k] * scalar
-        return result
-    elif isinstance(data, tuple):
-        return tuple(scale_nested(scalar, x) for x in data)
-    else:
-        raise TypeError(f"Unsupported type: {type(data)}")
 
-def flatten_and_move_to_device(nested, device='cuda:0', clone=False):
-    """
-    Recursively flatten nested tuples of dictionaries into a single dictionary,
-    move all tensors to the specified device, optionally clone them.
-    """
-    flat_dict = {}
+def linear_mod(g, name):
+    # Move to CPU immediately for SVD
+    g_cpu = g.cpu()
     
-    if isinstance(nested, dict):
-        for k, v in nested.items():
-            if clone:
-                flat_dict[k] = v.clone().to(device)
-            else:
-                flat_dict[k] = v.to(device) if v.device != torch.device(device) else v
-    elif isinstance(nested, tuple):
-        for item in nested:
-            flat_dict.update(flatten_and_move_to_device(item, device, clone))
-    else:
-        raise TypeError(f"Unexpected type: {type(nested)}")
-    
-    return flat_dict
+ 
+    U, S, Vt = torch.linalg.svd(g_cpu, full_matrices=False)
+    result = U @ Vt * sqrt(g_cpu.shape[0] / g_cpu.shape[1])
+    # Keep on CPU
+    return {name: result}
 
+
+
+def conv2d_mod(g, name):
+    # Move to CPU immediately
+    g_cpu = g.cpu()
+
+
+    matrix = g_cpu
+    dout, din, k, _ = matrix.shape
+    
+    scaling_factor = (1.0 / k**2) * math.sqrt(dout / din)
+    transformed = torch.zeros_like(matrix)
+    
+    for i in range(k):
+        for j in range(k):
+            slice_matrix = matrix[:, :, i, j]
+            U, S, Vt = torch.linalg.svd(slice_matrix, full_matrices=False)
+            reconstructed = U @ Vt
+            transformed[:, :, i, j] = scaling_factor * reconstructed
+    
+    return {name: transformed}
 
 class Module:
-    def __init__(self, mass, sensitivity, dualize=None):
+    def __init__(self, mass, sensitivity, name):
         self.mass = mass
         self.sensitivity = sensitivity
-        self.dualize = dualize
+        self.grads = []
+        self.name = name
     
+    def update_gradients(self, g):
+    	self.grads = g
+
     def set_mass(self, mass):
         self.mass = mass
-        
-    def set_dualize(self, dualize):
-        self.dualize = dualize
-        
+       
     def get_mass(self):
         return self.mass
     
     def get_sensitivity(self):
         return self.sensitivity
         
-    def get_dualitymap(self):
-        return self.dualize
+    def get_gradients(self):
+    	return self.grads
+    def get_name(self):
+    	return self.name
+
+def mul_grad(g, scalar):
+	if len(g) == 1:
+		g[g.keys()[0]] *= scalar 
+		return g
+	else:
+		print("EROORORRORORORORORORO TOO MANY VALUES IN GRADIENTS DICT")
+	return None
+def compose(M2, M1): #M2 and M1 are Modules
+	M = Module(M2.get_mass() + M1.get_mass(), M1.get_sensitivity()*M2.get_sensitivity,  M2.get_name() +"("+M1.get_name()+")")
+	scalar_M2 = M2.get_mass()/M.get_mass()
+	scalar_M1 = (1/M2.get_sensitivity())* M1.get_mass()/M.get_mass() 
+
+	grads_dualized = []
+	if len(M2.get_gradients())> 1:
+		print("EROORORRORORORORORORO")
+	for g in M2.get_gradients():
+		grads_dualized.append(mul_grad(g, scalar_M2))
+
+	for g in M1.get_gradients():
+		grads_dualized.append(mul_grad(g, scalar_M1))
 
 
-def create_linear_mod(g, name, mass):
-    # Move to CPU immediately for SVD
-    g_cpu = g.cpu()
-    
-    def linear_dualize():
-        U, S, Vt = torch.linalg.svd(g_cpu, full_matrices=False)
-        result = U @ Vt * sqrt(g_cpu.shape[0] / g_cpu.shape[1])
-        # Keep on CPU
-        return {name: result}
-    
-    M = Module(mass, 1, linear_dualize)
+	M.update_gradients(grads_dualized)
     return M
 
+def build_duality_map(layer_names, grads, masses): # Assuming no concatenation
 
-def create_conv2d_mod(g, name, mass):
-    # Move to CPU immediately
-    g_cpu = g.cpu()
-    
-    def conv_dualize():
-        matrix = g_cpu
-        dout, din, k, _ = matrix.shape
-        
-        scaling_factor = (1.0 / k**2) * math.sqrt(dout / din)
-        transformed = torch.zeros_like(matrix)
-        
-        for i in range(k):
-            for j in range(k):
-                slice_matrix = matrix[:, :, i, j]
-                U, S, Vt = torch.linalg.svd(slice_matrix, full_matrices=False)
-                reconstructed = U @ Vt
-                transformed[:, :, i, j] = scaling_factor * reconstructed
-        
-        return {name: transformed}
-    
-    M = Module(mass, 1, conv_dualize)
-    return M
-
-
-def create_embedding_mod(g, name, mass):
-    # Move to CPU
-    g_cpu = g.cpu()
-    
-    def embedding_dualize():
-        rms_norm = torch.sqrt(torch.mean(g_cpu ** 2, dim=0, keepdim=True) + 1e-8)
-        return {name: g_cpu / rms_norm}
-    
-    M = Module(mass, 1, embedding_dualize)
-    return M
-
-
-def concatenate(M1, M2):
-    M = Module(M1.get_mass() + M2.get_mass(), 
-               M1.get_sensitivity() + M2.get_sensitivity())
-    
-    def concat_dualize():
-        ratio1 = M1.get_mass() / M.get_mass()
-        ratio2 = M2.get_mass() / M.get_mass()
-        g1 = M1.get_dualitymap()()
-        g2 = M2.get_dualitymap()()
-        result = (scale_nested(ratio1, g1), scale_nested(ratio2, g2))
-        return result
-    
-    M.set_dualize(concat_dualize)
-    return M
-
-
-def compose(M2, M1):
-    M = Module(M1.get_mass() + M2.get_mass(), 
-               M1.get_sensitivity() * M2.get_sensitivity())
-    
-    def compose_dualize():
-        sensitivity_factor = 1.0 / M2.get_sensitivity()
-        ratio1 = M1.get_mass() / M.get_mass()
-        ratio2 = M2.get_mass() / M.get_mass()
-        print(f"  Compose ratios: ratio1={ratio1:.4f}, ratio2={ratio2:.4f}, total_mass={M.get_mass():.2f}")
-        
-        g1 = M1.get_dualitymap()()
-        g2 = M2.get_dualitymap()()
-        result = (scale_nested(sensitivity_factor * ratio1, g1),
-                scale_nested(ratio2, g2))
-        return result
-    
-    M.set_dualize(compose_dualize)
-    return M
-
-
-def build_clip_vit_network_module(layer_names, grads, masses):
-    """
-    Build a modular duality network for CLIP ViT - MEMORY OPTIMIZED VERSION
-    """
-    module_map = {}
-    
-    print("\n" + "="*80)
-    print("Step 1: Creating Atomic Layer Modules")
-    print("="*80)
-    
-    for name in layer_names:
-        # Skip biases, layer norms, and non-trainable parameters
-        if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
+	modules  = []
+	for name in layer_names:
+		if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
             continue
-        
-        mass = masses[name]
-        
-        # Visual conv1
+
+		dm = None
+		# Visual conv1
         if 'visual.conv1.weight' in name:
-            module_map['visual_conv1'] = create_conv2d_mod(grads[name], name, mass)
+            dm = conv2d_mod(grads[name])
             print(f"✓ visual_conv1: Conv2D module")
         
         # Visual projection
         elif 'visual.proj' in name and 'out_proj' not in name:
-            module_map['visual_proj'] = create_linear_mod(grads[name], name, mass)
+            dm = linear_mod(grads[name])
             print(f"✓ visual_proj: Linear module")
         
         # Visual positional embedding
         elif 'visual.positional_embedding' in name:
-            module_map['visual_positional_embedding'] = create_linear_mod(grads[name], name, mass)
+            dm = linear_mod(grads[name])
             print(f"✓ visual.positional_embedding: Linear module")
         
         # Visual transformer blocks
         elif 'visual.transformer.resblocks' in name and 'weight' in name:
-            parts = name.split('.')
-            try:
-                resblocks_idx = parts.index('resblocks')
-                block_idx = int(parts[resblocks_idx + 1])
-            except (ValueError, IndexError):
-                print(f"⚠ Skipping malformed name: {name}")
-                continue
-            
-            block_name = f"visual_block_{block_idx}"
-            
             if 'attn.in_proj_weight' in name:
-                key = f'{block_name}_attn_in'
-                if key not in module_map:
-                    module_map[key] = create_linear_mod(grads[name], name, mass)
-                    print(f"✓ {key}: Linear module")
+                    dm = linear_mod(grads[name])
             elif 'attn.out_proj.weight' in name:
-                key = f'{block_name}_attn_out'
-                if key not in module_map:
-                    module_map[key] = create_linear_mod(grads[name], name, mass)
-                    print(f"✓ {key}: Linear module")
+                    dm = linear_mod(grads[name])
             elif 'mlp.c_fc.weight' in name:
-                key = f'{block_name}_mlp_fc'
-                if key not in module_map:
-                    module_map[key] = create_linear_mod(grads[name], name, mass)
-                    print(f"✓ {key}: Linear module")
+                    dm = linear_mod(grads[name])
             elif 'mlp.c_proj.weight' in name:
-                key = f'{block_name}_mlp_proj'
-                if key not in module_map:
-                    module_map[key] = create_linear_mod(grads[name], name, mass)
-                    print(f"✓ {key}: Linear module")
-    
-    # ========================================================================
-    # Step 2: Build visual transformer blocks
-    # ========================================================================
-    print("\n" + "="*80)
-    print("Step 2: Building Visual Transformer Blocks")
-    print("="*80)
-    
-    block_indices = set()
-    for key in module_map.keys():
-        if key.startswith('visual_block_'):
-            parts = key.split('_')
-            if len(parts) >= 3 and parts[2].isdigit():
-                block_indices.add(int(parts[2]))
-    
-    num_blocks = len(block_indices)
-    print(f"\nFound {num_blocks} transformer blocks")
-    
-    visual_blocks = []
-    for i in sorted(block_indices):
-        block_name = f"visual_block_{i}"
-        
-        required_keys = [
-            f'{block_name}_attn_in',
-            f'{block_name}_attn_out',
-            f'{block_name}_mlp_fc',
-            f'{block_name}_mlp_proj'
-        ]
-        
-        if not all(key in module_map for key in required_keys):
-            print(f"⚠ Skipping incomplete block {i}")
-            continue
-        
-        # Compose attention: out_proj ∘ in_proj
-        attn_block = compose(
-            module_map[f'{block_name}_attn_out'],
-            module_map[f'{block_name}_attn_in']
-        )
-        
-        # Compose MLP: c_proj ∘ c_fc
-        mlp_block = compose(
-            module_map[f'{block_name}_mlp_proj'],
-            module_map[f'{block_name}_mlp_fc']
-        )
-        
-        # Compose full block: mlp ∘ attn
-        full_block = compose(mlp_block, attn_block)
-        visual_blocks.append(full_block)
-        
-        # Clean up intermediate modules
-        del module_map[f'{block_name}_attn_in']
-        del module_map[f'{block_name}_attn_out']
-        del module_map[f'{block_name}_mlp_fc']
-        del module_map[f'{block_name}_mlp_proj']
-        
-        print(f"✓ {block_name} = mlp ∘ attn  [Mass: {full_block.get_mass():.2f}]")
-    
-    # ========================================================================
-    # Step 3: Compose all visual transformer blocks sequentially
-    # ========================================================================
-    print("\n" + "="*80)
-    print("Step 3: Composing Visual Transformer Blocks Sequentially")
-    print("="*80)
-    
-    if len(visual_blocks) == 0:
-        print("⚠ ERROR: No visual blocks found!")
-        return module_map
-    
-    visual_transformer = visual_blocks[0]
-    for i in range(1, len(visual_blocks)):
-        visual_transformer = compose(visual_blocks[i], visual_transformer)
-        print(f"✓ Composed blocks 0-{i}  [Mass: {visual_transformer.get_mass():.2f}]")
-    
-    module_map['visual_transformer'] = visual_transformer
-    print(f"\n✓ visual_transformer complete [Mass: {visual_transformer.get_mass():.2f}]")
-    
-    # ========================================================================
-    # Step 4: Build visual encoder
-    # ========================================================================
-    print("\n" + "="*80)
-    print("Step 4: Building Visual Encoder")
-    print("="*80)
-    
-    if 'visual_conv1' not in module_map:
-        print("⚠ ERROR: visual_conv1 not found!")
-        return module_map
-    
-    visual_pre_transf = module_map['visual_conv1']
-    
-    if 'visual_positional_embedding' in module_map:
-        visual_pre_transf = compose(
-            module_map['visual_positional_embedding'],
-            visual_pre_transf
-        )
-    
-    visual_backbone = compose(visual_transformer, visual_pre_transf)
-    
-    print(f"✓ visual_backbone = visual_transformer ∘ conv1")
-    print(f"  Mass: {visual_backbone.get_mass():.2f}")
-    
-    if 'visual_proj' in module_map:
-        visual_encoder = compose(module_map['visual_proj'], visual_backbone)
-        print(f"✓ visual_encoder = visual_proj ∘ visual_backbone")
-        print(f"  Mass: {visual_encoder.get_mass():.2f}")
-    else:
-        visual_encoder = visual_backbone
-    
-    module_map['network'] = visual_encoder
-    
-    print(f"\n{'='*80}")
-    print(f"✓ NETWORK = visual_encoder")
-    print(f"  Total Mass:        {module_map['network'].get_mass():.2f}")
-    print(f"  Total Sensitivity: {module_map['network'].get_sensitivity():.2f}")
-    print(f"{'='*80}")
-    
-    return module_map
+                    dm = linear_mod(grads[name])
+        if dm not None:
+        	module.append(Module(mass[name], 1.0, dm, name))
+       	else:
+       		print(name, "Ignored")
+
+    #COMPOSE
+    composed = modules[0]
+   	for m in range(1,len(modules)):
+    	composed = compose(modules[m], composed)
+
+    print(composed)
+    return flat_composed
+
 def mass_schedule(multi_task_vector_cpu):
     schedule = {}
     
@@ -479,7 +282,7 @@ class DualMerger(TaskVectorBasedMerger):
         
         masses = mass_schedule(ordered_keys)
         print(ordered_keys)
-        module_net = build_clip_vit_network_module(ordered_keys, multi_task_vector_cpu, masses)
+        module_net = build_duality_map(ordered_keys, multi_task_vector_cpu, masses)
         print(module_net['network'].get_dualitymap()())
         # Get dualized vectors (already on CPU)
         module_vec_cpu = module_net['network'].get_dualitymap()()
