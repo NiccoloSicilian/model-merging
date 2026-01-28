@@ -219,26 +219,9 @@ def build_duality_map(layer_names, grads, masses):
 def mass_schedule(multi_task_vector_cpu):
     schedule = {}
     
-    # Requirement: First layer is strictly 1.0
-    current_mass = 1.0
-    
-    # Calculate how much to decrease per layer to reach a target (e.g., 0.1) by the end
-    # You can adjust 'target_low_mass' to control how fast it decreases.
-    target_low_mass = 0.1 
-    total_layers = len(multi_task_vector_cpu)
-    
-    # Avoid division by zero if there's only one layer
-    if total_layers > 1:
-        decrement = (current_mass - target_low_mass) / (total_layers - 1)
-    else:
-        decrement = 0.0
-
     for i, key in enumerate(multi_task_vector_cpu):
         # Assign the current mass
-        schedule[key] = current_mass
-        
-        # Decrease for the NEXT layer
-        current_mass -= decrement
+        schedule[key] =0.5
         
     return schedule
 
@@ -347,24 +330,17 @@ class DualMerger(TaskVectorBasedMerger):
         masses = mass_schedule(ordered_keys)
         print(ordered_keys)
         module_net = build_duality_map(ordered_keys, multi_task_vector_cpu, masses)
-        print(module_net['network'].get_dualitymap()())
         # Get dualized vectors (already on CPU)
-        module_vec_cpu = module_net['network'].get_dualitymap()()
-        module_vec_flat = flatten_and_move_to_device(
-            module_vec_cpu,
-            device='cpu',
-            clone=False
-        )
         
-        del module_net
-        del module_vec_cpu
-        gc.collect()
+        module_vec_flat = module_net
+        
         
         # Move back to GPU only what we need
         for key in module_vec_flat:
             multi_task_vector_cpu[key] = module_vec_flat[key].to(self.device)
         
         del module_vec_flat
+        del module_vec_cpu
         gc.collect()
             
         model_name = self.model_name
