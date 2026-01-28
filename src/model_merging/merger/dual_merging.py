@@ -215,17 +215,6 @@ def build_duality_map(layer_names, grads, masses):
     return composed.get_gradients()
 
 
-# Example usage:
-if __name__ == "__main__":
-    # Assuming you have:
-    # layer_names: list of layer names in execution order
-    # grads: dict mapping layer_name -> gradient tensor
-    # masses: dict mapping layer_name -> mass value
-    
-    dualized_grads = build_duality_map(layer_names, grads, masses)
-    
-    # dualized_grads is now a dict: {layer_name: dualized_gradient_tensor}
-    # You can use these to update your model parameters
 
 def mass_schedule(multi_task_vector_cpu):
     schedule = {}
