@@ -143,11 +143,11 @@ def linear_mass_scheduler_per_transfblock(layer_names): #Asuming layers list ord
         elif 'visual.transformer.resblocks' in name and 'weight' in name:
             if 'attn.in_proj_weight' in name or 'attn.out_proj.weight' in name or 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight':
                 if name.split('resblocks.')[1].split('.')[0] == block_id: 
-                    mass[name] = current_mass
+                    masses[name] = current_mass
                 else:
                     current_mass += step
                     block_id = name.split('resblocks.')[1].split('.')[0]
-                    mass[name] =current_mass
+                    masses[name] =current_mass
     return masses
     
 def build_duality_map(layer_names, grads):
