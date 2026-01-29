@@ -129,9 +129,9 @@ def compose(M_later, M_earlier):
     return M
 
 def linear_mass_scheduler_per_transfblock(layer_names): #Asuming layers list ordered by execution
-    current_mass = 0.1
+    current_mass = 0.5
     block_id = 'n'
-    step  = 0.026
+    step  = 0.0
     masses = {}
     for name in layer_names:
         # Skip non-trainable parameters
