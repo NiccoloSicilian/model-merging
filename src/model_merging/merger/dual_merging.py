@@ -132,6 +132,7 @@ def linear_mass_scheduler_per_transfblock(layer_names): #Asuming layers list ord
     current_mass = 0.1
     block_id = 'n'
     step  = 0.026
+    masses = {}
     for name in layer_names:
         # Skip non-trainable parameters
         if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
