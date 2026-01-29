@@ -137,14 +137,14 @@ def linear_mass_scheduler_per_transfblock(layer_names): #Asuming layers list ord
     masses = {}
     tot_layers = 0
     l = 1
-    for name in layer_names
+    for name in layer_names:
         if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
                 continue
-            if 'visual.conv1.weight' in name or( 'visual.proj' in name and 'out_proj' not in name) or 'visual.positional_embedding' in name:
+        if 'visual.conv1.weight' in name or( 'visual.proj' in name and 'out_proj' not in name) or 'visual.positional_embedding' in name:
+            tot_layers += 1
+        elif 'visual.transformer.resblocks' in name and 'weight' in name:
+            if 'attn.in_proj_weight' in name or 'attn.out_proj.weight' in name or 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight' in name:
                 tot_layers += 1
-            elif 'visual.transformer.resblocks' in name and 'weight' in name:
-                if 'attn.in_proj_weight' in name or 'attn.out_proj.weight' in name or 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight':
-                    tot_layers += 1
     print("TOT LAYERS: ", l)
     for name in layer_names:
         # Skip non-trainable parameters
@@ -155,7 +155,7 @@ def linear_mass_scheduler_per_transfblock(layer_names): #Asuming layers list ord
             masses[name] = quad_mass(tot_layers, l)
             l += 1
         elif 'visual.transformer.resblocks' in name and 'weight' in name:
-            if 'attn.in_proj_weight' in name or 'attn.out_proj.weight' in name or 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight':
+            if 'attn.in_proj_weight' in name or 'attn.out_proj.weight' in name or 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight' in name:
                 if name.split('resblocks.')[1].split('.')[0] == block_id: 
                     masses[name] = quad_mass(tot_layers, l)
                     l += 1 
