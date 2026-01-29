@@ -217,7 +217,7 @@ def build_duality_map(layer_names, grads):
         if dm is not None:
             module = Module(masses[name], 1.0, dm, name)
             modules.append(module)
-            print(f"✓ {name}: {layer_type} [Mass: {masses[name]:.2f}]")
+            print(f"✓ {name}: {layer_type} [Mass: {masses[name]}]")
         else:
             print(f"⚠ {name}: Ignored")
     
