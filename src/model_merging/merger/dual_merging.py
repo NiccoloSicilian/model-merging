@@ -128,7 +128,27 @@ def compose(M_later, M_earlier):
     
     return M
 
-
+def linear_mass_scheduler_per_transfblock(layer_names): #Asuming layers list ordered by execution
+    current_mass = 0.1
+    block_id = 'n'
+    step  = 0.026
+    for name in layer_names:
+        # Skip non-trainable parameters
+        if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
+            continue
+        if 'visual.conv1.weight' in name or( 'visual.proj' in name and 'out_proj' not in name) or 'visual.positional_embedding' in name:
+            current_mass += step
+            masses[name] = current_mass
+        elif 'visual.transformer.resblocks' in name and 'weight' in name:
+            if 'attn.in_proj_weight' in name or 'attn.out_proj.weight' in name or 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight':
+                if name.split('resblocks.')[1].split('.')[0] == block_id: 
+                    mass[name] = current_mass
+                else:
+                    current_mass += step
+                    block_id = name.split('resblocks.')[1].split('.')[0]
+                    mass[name] =current_mass
+    return masses
+    
 def build_duality_map(layer_names, grads):
     """
     Build modular duality map assuming layers are in execution order.
@@ -139,9 +159,7 @@ def build_duality_map(layer_names, grads):
     print("="*80)
     
     modules = []
-    current_mass = 0.1
-    block_id = 'n'
-    
+    masses = linear_mass_scheduler_per_transfblock(layer_names)
     for name in layer_names:
         # Skip non-trainable parameters
         if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
@@ -153,18 +171,14 @@ def build_duality_map(layer_names, grads):
         if 'visual.conv1.weight' in name:
             dm = conv2d_mod(grads[name], name)
             layer_type = "Conv2D"
-            current_mass += 0.026
-            mass = current_mass
         elif 'visual.proj' in name and 'out_proj' not in name:
             dm = linear_mod(grads[name], name)
             layer_type = "Linear (visual proj)"
-            current_mass += 0.026
-            mass = current_mass
+      
         elif 'visual.positional_embedding' in name:
             dm = linear_mod(grads[name], name)
             layer_type = "Linear (pos emb)"
-            current_mass += 0.026
-            mass = current_mass
+           
         elif 'visual.transformer.resblocks' in name and 'weight' in name:
             
                 
@@ -181,19 +195,12 @@ def build_duality_map(layer_names, grads):
                 dm = linear_mod(grads[name], name)
                 layer_type = "Linear (mlp proj)"
 
-            if 'attn.in_proj_weight' in name or 'attn.out_proj.weight' in name or 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight':
-                if name.split('resblocks.')[1].split('.')[0] == block_id: 
-                    mass = current_mass
-                else:
-                    current_mass += 0.026
-                    block_id = name.split('resblocks.')[1].split('.')[0]
-                    mass =current_mass
         
         # Create module if duality map was computed
         if dm is not None:
-            module = Module(mass, 1.0, dm, name)
+            module = Module(masses[name], 1.0, dm, name)
             modules.append(module)
-            print(f"✓ {name}: {layer_type} [Mass: {mass:.2f}]")
+            print(f"✓ {name}: {layer_type} [Mass: {masses[name]:.2f}]")
         else:
             print(f"⚠ {name}: Ignored")
     
