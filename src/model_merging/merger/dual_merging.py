@@ -130,7 +130,7 @@ def compose(M_later, M_earlier):
 def uniform_mass(constant):
     return constant
 def quad_mass(tot_layers, current_l):
-    mass = (current_l / tot_layers)**2 * 0.5
+    mass = (current_l / tot_layers)**2 
     return mass
 def cubic_mass(tot_layers, current_l):
     mass = (current_l / tot_layers)**3 * 0.5
