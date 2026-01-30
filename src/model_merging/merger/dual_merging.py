@@ -136,7 +136,7 @@ def linear_mass_scheduler_per_transfblock(layer_names): #Asuming layers list ord
     block_id = 'n'
     masses = {}
     tot_layers = 0
-    l = 
+    l = 0
     mass_value = 0.5
     for name in layer_names:
         if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
@@ -196,8 +196,6 @@ def build_duality_map(layer_names, grads):
             layer_type = "Linear (pos emb)"
            
         elif 'visual.transformer.resblocks' in name and 'weight' in name:
-            
-                
             if 'attn.in_proj_weight' in name:
                 dm = linear_mod(grads[name], name)
                 layer_type = "Linear (attn in)"
@@ -383,7 +381,6 @@ class DualMerger(TaskVectorBasedMerger):
                 base_model.state_dict(), ft_state_dict
             )
             
-            del finetuned_models[dataset] 
             del ft_state_dict 
             
             if self.device.type == "cuda":
