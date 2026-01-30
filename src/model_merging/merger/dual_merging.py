@@ -132,8 +132,10 @@ def uniform_mass(constant):
 def quad_mass(tot_layers, current_l):
     mass = (current_l / tot_layers)**2 * 0.5
     return mass
-def SAR_based_mass(tot_layers, current_l):
+def SAR_based_mass(tot_layers, current_l, l):
     SAR_wrt_uniform = {'model.visual.positional_embedding': 1.000000062584877, 'model.visual.transformer.resblocks.0.attn.in_proj_weight': 0.8856697857379914, 'model.visual.transformer.resblocks.0.attn.out_proj.weight': 1.0000003337860108, 'model.visual.transformer.resblocks.0.mlp.c_fc.weight': 0.784840002655983, 'model.visual.transformer.resblocks.0.mlp.c_proj.weight': 1.000000274181366, 'model.visual.transformer.resblocks.1.attn.in_proj_weight': 0.8513899952173233, 'model.visual.transformer.resblocks.1.attn.out_proj.weight': 1.0000003576278687, 'model.visual.transformer.resblocks.1.mlp.c_fc.weight': 0.6923531800508499, 'model.visual.transformer.resblocks.1.mlp.c_proj.weight': 1.0000002205371856, 'model.visual.transformer.resblocks.2.attn.in_proj_weight': 0.8197143167257309, 'model.visual.transformer.resblocks.2.attn.out_proj.weight': 1.0000003457069397, 'model.visual.transformer.resblocks.2.mlp.c_fc.weight': 0.6534761279821396, 'model.visual.transformer.resblocks.2.mlp.c_proj.weight': 1.0000003099441528, 'model.visual.transformer.resblocks.3.attn.in_proj_weight': 0.7740017116069794, 'model.visual.transformer.resblocks.3.attn.out_proj.weight': 1.0000002980232239, 'model.visual.transformer.resblocks.3.mlp.c_fc.weight': 0.6447068989276886, 'model.visual.transformer.resblocks.3.mlp.c_proj.weight': 1.0000002682209015, 'model.visual.transformer.resblocks.4.attn.in_proj_weight': 0.745124101638794, 'model.visual.transformer.resblocks.4.attn.out_proj.weight': 1.0000003337860108, 'model.visual.transformer.resblocks.4.mlp.c_fc.weight': 0.6368181049823761, 'model.visual.transformer.resblocks.4.mlp.c_proj.weight': 1.0000002086162567, 'model.visual.transformer.resblocks.5.attn.in_proj_weight': 0.7284463524818421, 'model.visual.transformer.resblocks.5.attn.out_proj.weight': 1.0000003635883332, 'model.visual.transformer.resblocks.5.mlp.c_fc.weight': 0.6353657931089401, 'model.visual.transformer.resblocks.5.mlp.c_proj.weight': 1.000000274181366, 'model.visual.transformer.resblocks.6.attn.in_proj_weight': 0.7146259039640427, 'model.visual.transformer.resblocks.6.attn.out_proj.weight': 1.0000003635883332, 'model.visual.transformer.resblocks.6.mlp.c_fc.weight': 0.6330572545528412, 'model.visual.transformer.resblocks.6.mlp.c_proj.weight': 1.0000002801418304, 'model.visual.transformer.resblocks.7.attn.in_proj_weight': 0.7121714174747467, 'model.visual.transformer.resblocks.7.attn.out_proj.weight': 1.0000003755092621, 'model.visual.transformer.resblocks.7.mlp.c_fc.weight': 0.6320837587118149, 'model.visual.transformer.resblocks.7.mlp.c_proj.weight': 1.0000002920627593, 'model.visual.transformer.resblocks.8.attn.in_proj_weight': 0.7013912945985794, 'model.visual.transformer.resblocks.8.attn.out_proj.weight': 1.000000351667404, 'model.visual.transformer.resblocks.8.mlp.c_fc.weight': 0.6082266658544541, 'model.visual.transformer.resblocks.8.mlp.c_proj.weight': 1.0000003218650817, 'model.visual.transformer.resblocks.9.attn.in_proj_weight': 0.6932003498077393, 'model.visual.transformer.resblocks.9.attn.out_proj.weight': 1.000000262260437, 'model.visual.transformer.resblocks.9.mlp.c_fc.weight': 0.60078564286232, 'model.visual.transformer.resblocks.9.mlp.c_proj.weight': 1.000000184774399, 'model.visual.transformer.resblocks.10.attn.in_proj_weight': 0.6970143854618073, 'model.visual.transformer.resblocks.10.attn.out_proj.weight': 1.0000003755092621, 'model.visual.transformer.resblocks.10.mlp.c_fc.weight': 0.596514767408371, 'model.visual.transformer.resblocks.10.mlp.c_proj.weight': 1.000000262260437, 'model.visual.transformer.resblocks.11.attn.in_proj_weight': 0.6953691840171814, 'model.visual.transformer.resblocks.11.attn.out_proj.weight': 1.000000262260437, 'model.visual.transformer.resblocks.11.mlp.c_fc.weight': 0.687382698059082, 'model.visual.transformer.resblocks.11.mlp.c_proj.weight': 1.0000001728534698, 'model.visual.proj': 0.9052014738321305}
+    if current_l not in SAR_wrt_uniform:
+        return quad_mass(tot_layers,l)
     drift = max(0.0, 1.0 - SAR_wrt_uniform[current_l])
     return 0.1 + drift
 def linear_mass_scheduler_per_transfblock(layer_names): #Asuming layers list ordered by execution
@@ -156,16 +158,16 @@ def linear_mass_scheduler_per_transfblock(layer_names): #Asuming layers list ord
         if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
             continue
         if 'visual.conv1.weight' in name or( 'visual.proj' in name and 'out_proj' not in name) or 'visual.positional_embedding' in name:
-            masses[name] =SAR_based_mass(tot_layers, name)
+            masses[name] =SAR_based_mass(tot_layers, name,l)
             l += 1
         elif 'visual.transformer.resblocks' in name and 'weight' in name:
             if 'attn.in_proj_weight' in name or 'attn.out_proj.weight' in name or 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight' in name:
                 if name.split('resblocks.')[1].split('.')[0] == block_id: 
-                    masses[name] = SAR_based_mass(tot_layers, name)
+                    masses[name] = SAR_based_mass(tot_layers, name,l)
                     l += 1 
                 else:
                     block_id = name.split('resblocks.')[1].split('.')[0]
-                    masses[name] = SAR_based_mass(tot_layers, name)
+                    masses[name] = SAR_based_mass(tot_layers, name,l)
                     l += 1
     return masses
     
