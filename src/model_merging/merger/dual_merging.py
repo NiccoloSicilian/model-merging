@@ -139,7 +139,7 @@ def linear_mass_scheduler_per_transfblock(layer_names): #Asuming layers list ord
     block_id = 'n'
     masses = {}
     tot_layers = 0
-    l = 0
+    l = 1
     mass_value = 0.5
     for name in layer_names:
         if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
