@@ -127,16 +127,17 @@ def compose(M_later, M_earlier):
     print(f"    Scalars: earlier={scalar_earlier:.4f}, later={scalar_later:.4f}")
     
     return M
+def uniform_mass(constant):
+    return constant
 def quad_mass(tot_layers, current_l):
     mass = (current_l / tot_layers)**2 * 0.5
     return mass
 def linear_mass_scheduler_per_transfblock(layer_names): #Asuming layers list ordered by execution
-    current_mass = 0.5
     block_id = 'n'
-    step  = 0.0
     masses = {}
     tot_layers = 0
-    l = 1
+    l = 
+    mass_value = 0.5
     for name in layer_names:
         if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
                 continue
@@ -151,18 +152,16 @@ def linear_mass_scheduler_per_transfblock(layer_names): #Asuming layers list ord
         if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
             continue
         if 'visual.conv1.weight' in name or( 'visual.proj' in name and 'out_proj' not in name) or 'visual.positional_embedding' in name:
-            current_mass += step
-            masses[name] = quad_mass(tot_layers, l)
+            masses[name] = uniform_mass(mass_value)
             l += 1
         elif 'visual.transformer.resblocks' in name and 'weight' in name:
             if 'attn.in_proj_weight' in name or 'attn.out_proj.weight' in name or 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight' in name:
                 if name.split('resblocks.')[1].split('.')[0] == block_id: 
-                    masses[name] = quad_mass(tot_layers, l)
+                    masses[name] = uniform_mass(mass_value)
                     l += 1 
                 else:
-                    current_mass += step
                     block_id = name.split('resblocks.')[1].split('.')[0]
-                    masses[name] = quad_mass(tot_layers, l)
+                    masses[name] = uniform_mass(mass_value)
                     l += 1
     return masses
     
@@ -301,6 +300,23 @@ def get_vit_topological_order(keys):
         return (5, 0, 0) # Unknown keys last
 
     return sorted(keys, key=sort_key)
+def compute_average_SAR(module_vec_flat, finetuned_models, datasets):
+    merged_svd_dict  = {}
+    for k in module_vec_flat:
+        if module_vec_flat[k].dim() == 2:
+            merged_svd_dict[k]  = svd(module_vec_flat[k])
+    SAR = {k: 0 for k in module_vec_flat}
+    count = {k : 0 for k in module_vec_flat}
+    for dataset in datasets:
+        for k,v in finetuned_models[dataset].items():
+            if k in module_vec_flat and module_vec_flat[k].dim() == 2:
+                count[k] += 1
+                SAR[k] += normF(merged_svd_dict['u']*transpose(merged_svd_dict['u'])*finetuned_models[dataset][k])/normF(finetuned_models[dataset][k])
+    avg_SAR_per_layer = {}
+    for k in count:
+        if count[k]>0:
+            avg_SAR_per_layer[k] = SAR[k]/count[k]
+    print("AVERAGE SAR PER LAYER:\n", avg_SAR_per_layer)
 class DualMerger(TaskVectorBasedMerger):
 
     def __init__(self, optimal_alphas, svd_path, svd_compress_factor, model_name, device=None):
@@ -362,8 +378,7 @@ class DualMerger(TaskVectorBasedMerger):
         # Get dualized vectors (already on CPU)
         
         module_vec_flat = module_net
-        
-        
+        compute_average_SAR(module_vec_flat, finetuned_models, datasets)
         # Move back to GPU only what we need
         for key in module_vec_flat:
             multi_task_vector_cpu[key] = module_vec_flat[key].to(self.device)
@@ -388,6 +403,7 @@ class DualMerger(TaskVectorBasedMerger):
             merged_encoder,
             coefficient=coefficient,
         )
+        
 
         return merged_encoder
 
