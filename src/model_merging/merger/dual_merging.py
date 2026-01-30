@@ -300,23 +300,61 @@ def get_vit_topological_order(keys):
         return (5, 0, 0) # Unknown keys last
 
     return sorted(keys, key=sort_key)
+import torch
+
 def compute_average_SAR(module_vec_flat, finetuned_models, datasets):
-    merged_svd_dict  = {}
-    for k in module_vec_flat:
-        if module_vec_flat[k].dim() == 2:
-            merged_svd_dict[k]  = svd(module_vec_flat[k])
-    SAR = {k: 0 for k in module_vec_flat}
-    count = {k : 0 for k in module_vec_flat}
+    """
+    Computes the Spectral Analysis of Regularization (SAR) or similar projection metric.
+    Formula implemented: || U @ U.T @ W_ft ||_F / || W_ft ||_F
+    """
+    merged_svd_dict = {}
+
+    # 1. Pre-compute SVD (U component) for the merged/reference model
+    for k, v in module_vec_flat.items():
+        if v.dim() == 2:
+            # torch.linalg.svd returns U, S, Vh
+            # full_matrices=False is usually preferred for efficiency
+            U, S, Vh = torch.linalg.svd(v, full_matrices=False)
+            merged_svd_dict[k] = U
+
+    SAR = {k: 0.0 for k in module_vec_flat}
+    count = {k: 0 for k in module_vec_flat}
+
+    # 2. Iterate through datasets and models
     for dataset in datasets:
-        for k,v in finetuned_models[dataset].items():
-            if k in module_vec_flat and module_vec_flat[k].dim() == 2:
+        if dataset not in finetuned_models:
+            continue
+            
+        for k, weight_ft in finetuned_models[dataset].items():
+            # Only process if we computed SVD for this layer (implies dim == 2)
+            if k in merged_svd_dict:
                 count[k] += 1
-                SAR[k] += normF(merged_svd_dict['u']*transpose(merged_svd_dict['u'])*finetuned_models[dataset][k])/normF(finetuned_models[dataset][k])
+                
+                U = merged_svd_dict[k]
+                
+                # --- CALCULATION FIXES ---
+                # 1. Use torch.linalg.norm with ord='fro' for Frobenius norm
+                # 2. Use @ for Matrix Multiplication (not *)
+                # 3. Optimization: U @ (U.T @ W) is faster than (U @ U.T) @ W
+                
+                # Project fine-tuned weight onto the subspace of the merged weight
+                # equivalent to: (U * U.T) * weight_ft
+                projected_weight = U @ (U.T @ weight_ft)
+                
+                numerator = torch.linalg.norm(projected_weight, ord='fro')
+                denominator = torch.linalg.norm(weight_ft, ord='fro')
+                
+                if denominator > 1e-9: # Avoid division by zero
+                    SAR[k] += (numerator / denominator).item()
+
+    # 3. Average the results
     avg_SAR_per_layer = {}
     for k in count:
-        if count[k]>0:
-            avg_SAR_per_layer[k] = SAR[k]/count[k]
+        if count[k] > 0:
+            avg_SAR_per_layer[k] = SAR[k] / count[k]
+
     print("AVERAGE SAR PER LAYER:\n", avg_SAR_per_layer)
+    return avg_SAR_per_layer
 class DualMerger(TaskVectorBasedMerger):
 
     def __init__(self, optimal_alphas, svd_path, svd_compress_factor, model_name, device=None):
