@@ -128,8 +128,8 @@ def compose(M_later, M_earlier):
     print(f"    Scalars: earlier={scalar_earlier:.4f}, later={scalar_later:.4f}")
     
     return M
-def uniform_mass(constant):
-    return constant
+def uniform_mass(tot_layers, current_l):
+    return 0.5
 def quad_mass(tot_layers, current_l):
     mass = (current_l / tot_layers)**2 
     return mass
@@ -167,16 +167,16 @@ def linear_mass_scheduler_per_transfblock(layer_names): #Asuming layers list ord
         if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
             continue
         if 'visual.conv1.weight' in name or( 'visual.proj' in name and 'out_proj' not in name) or 'visual.positional_embedding' in name:
-            masses[name] =linear_mass(tot_layers,l)
+            masses[name] =uniform_mass(tot_layers,l)
             l += 1
         elif 'visual.transformer.resblocks' in name and 'weight' in name:
             if 'attn.in_proj_weight' in name or 'attn.out_proj.weight' in name or 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight' in name:
                 if name.split('resblocks.')[1].split('.')[0] == block_id: 
-                    masses[name] = linear_mass(tot_layers, l)
+                    masses[name] = uniform_mass(tot_layers, l)
                     l += 1 
                 else:
                     block_id = name.split('resblocks.')[1].split('.')[0]
-                    masses[name] = linear_mass(tot_layers, l)
+                    masses[name] = uniform_mass(tot_layers, l)
                     l += 1
     return masses
     
@@ -315,6 +315,13 @@ def get_vit_topological_order(keys):
     return sorted(keys, key=sort_key)
 import torch
 
+def get_sing_values(merged_enc):
+    for layer in merged_enc:
+        tensor = merged_enc[layer]
+        if tensor.dim() == 2:
+            _, S, _ = torch.linalg.svd(tensor)
+            print(layer, S[0].item())
+
 class DualMerger(TaskVectorBasedMerger):
 
     def __init__(self, optimal_alphas, svd_path, svd_compress_factor, model_name, device=None):
@@ -393,14 +400,14 @@ class DualMerger(TaskVectorBasedMerger):
 
         merged_encoder = copy.deepcopy(base_model)
         print("USING ALPHA:", coefficient)
-        
+        get_sing_values(multi_task_vector_cpu)
         merged_encoder = apply_dict_to_model(
             multi_task_vector_cpu,
             merged_encoder,
             coefficient=coefficient,
         )
         
-
+        get_sing_values(merged_encoder)
         return merged_encoder
 
 
