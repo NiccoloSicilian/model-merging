@@ -315,12 +315,6 @@ def get_vit_topological_order(keys):
     return sorted(keys, key=sort_key)
 import torch
 
-def get_sing_values(merged_enc):
-    for layer in merged_enc:
-        tensor = merged_enc[layer]
-        if tensor.dim() == 2:
-            _, S, _ = torch.linalg.svd(tensor)
-            print(layer, S[0].item())
 
 class DualMerger(TaskVectorBasedMerger):
 
@@ -400,7 +394,6 @@ class DualMerger(TaskVectorBasedMerger):
 
         merged_encoder = copy.deepcopy(base_model)
         print("USING ALPHA:", coefficient)
-        get_sing_values(multi_task_vector_cpu)
         merged_encoder = apply_dict_to_model(
             multi_task_vector_cpu,
             merged_encoder,
