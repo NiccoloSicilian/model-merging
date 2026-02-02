@@ -407,7 +407,6 @@ class DualMerger(TaskVectorBasedMerger):
             coefficient=coefficient,
         )
         
-        get_sing_values(merged_encoder)
         return merged_encoder
 
 
