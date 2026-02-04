@@ -38,11 +38,7 @@ uv run scripts/evaluate_multi_task_merging.py
 ```
 
 If you want to define a new merging method, create a new class in `src/model_merging/merger/` and a corresponding config in `conf/merger`. Then change the `merger` field in the `multitask.yaml` config.
-
-## 👤 Maintainers
-
-
-- **Donato Crisostomi** - [donatocrisostomi@gmail.com](mailto:donatocrisostomi@gmail.com)
+Results can also be reproduced using the notebook in therepo
 
 
 ---
