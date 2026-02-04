@@ -18,7 +18,12 @@ pylogger = logging.getLogger(__name__)
 import torch
 import copy
 from pathlib import Path
-
+def get_sing_values(merged_enc):
+    for layer in merged_enc:
+        tensor = merged_enc[layer]
+        if tensor.dim() == 2:
+            _, S, _ = torch.linalg.svd(tensor)
+            print(layer, S[0].item())
 # Keep your existing imports...
 # from ... import TaskVectorBasedMerger, compute_task_dict, get_svd_dict, isotropic_sum, apply_dict_to_model
 class IsotropicMerger(TaskVectorBasedMerger):
@@ -72,6 +77,7 @@ class IsotropicMerger(TaskVectorBasedMerger):
             ref_state_dict=ref_state_dict,
             svd_dict=svd_dict,
         )
+        get_sing_values(multi_task_vector)
         model_name = self.model_name
         coefficient = 1.0 
 
