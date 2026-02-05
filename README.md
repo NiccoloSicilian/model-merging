@@ -1,48 +1,66 @@
-# 
+Model Merging Utilities
 
-Utils and methods for weight-space merging.
+This repository provides utilities and methods for weight-space model merging — a process that allows you to combine multiple pretrained models into a single model by operating directly on their weights. This can be useful for multi-task learning, model compression, or combining specialized models into a single generalist model.
 
----
+The project is designed to be modular and extensible, allowing you to implement new merging methods and easily evaluate merged models on multiple tasks.
 
-## 🚀 Installation
+🚀 Installation
 
-You can install this project using [`uv`](https://github.com/astral-sh/uv):
+You can install the project using uv
+:
 
-```sh
 uv sync
-```
 
----
 
-## 📂 Project Structure
+This will install all dependencies and prepare the environment for running the scripts and notebooks.
 
-```
+📂 Project Structure
 /
-├── src/                     # Source directory
-│   ├── model-merging/  # Main package
+├── src/                     
+│   ├── model_merging/       # Core package containing merging logic
 │   │   ├── __init__.py
-│   │   ├── main.py
-├── pyproject.toml           # Package configuration
+│   │   ├── main.py          # Main entry point for model merging operations
+│   │   ├── merger/          # Directory for implementing merging strategies
+│   │   └── utils.py         # Helper functions and utilities
+├── conf/                    # Configuration files for different tasks and mergers
+│   ├── multitask.yaml       # Multi-task merging configuration
+│   └── merger/              # Configuration for individual merging methods
+├── scripts/                 # Evaluation and utility scripts
+│   └── evaluate_multi_task_merging.py
+├── notebooks/               # Example notebooks to reproduce experiments
+├── pyproject.toml           # Project configuration
 ├── README.md                # This file
 └── LICENSE                  # License information
-```
 
----
+🔧 Core Features
+1. Multi-Task Merging
 
-## Multi-Task Merging
+The repository supports merging multiple models into a single multi-task model. You can configure which models to merge and which tasks to evaluate using the conf/multitask.yaml file.
 
-Use `conf/multitask.yaml` to define the models you want to merge and the tasks you will evaluate the merged model on. Then run
+To run a multi-task evaluation:
 
-```sh
 uv run scripts/evaluate_multi_task_merging.py
-```
-
-If you want to define a new merging method, create a new class in `src/model_merging/merger/` and a corresponding config in `conf/merger`. Then change the `merger` field in the `multitask.yaml` config.
-Results can also be reproduced using the notebook in therepo
 
 
----
+This script merges the models according to the specified strategy and evaluates performance on the defined tasks.
 
-## 📜 License
+2. Extensible Merging Methods
 
-This project is licensed under the **MIT** License. See [LICENSE](LICENSE) for more details.
+You can define new weight-space merging strategies by:
+
+Creating a new class in src/model_merging/merger/.
+
+Adding a corresponding configuration in conf/merger/.
+
+Updating the merger field in your multitask.yaml configuration to use your new method.
+
+This modular design makes it easy to experiment with new algorithms for combining models.
+
+3. Reproducibility
+
+Results can also be reproduced and explored interactively using the notebooks provided in the notebooks/ directory.
+
+📜 License
+
+This project is licensed under the MIT License. See LICENSE
+ for more details.
