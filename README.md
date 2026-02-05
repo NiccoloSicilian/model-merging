@@ -4,7 +4,7 @@ This repository provides utilities and methods for weight-space model merging �
 
 The project is designed to be modular and extensible, allowing you to implement new merging methods and easily evaluate merged models on multiple tasks.
 
-## 🚀 Installation
+## Installation
 
 You can install the project using `uv`:
 ```bash
@@ -13,7 +13,7 @@ uv sync
 
 This will install all dependencies and prepare the environment for running the scripts and notebooks.
 
-## 📂 Project Structure
+## Project Structure
 ```
 /
 ├── src/                     
@@ -33,7 +33,7 @@ This will install all dependencies and prepare the environment for running the s
 └── LICENSE                  # License information
 ```
 
-## 🔧 Core Features
+## Core Features
 
 ### 1. Multi-Task Merging
 
@@ -60,6 +60,6 @@ This modular design makes it easy to experiment with new algorithms for combinin
 
 Results can also be reproduced and explored interactively using the notebooks provided in the `notebooks/` directory.
 
-## 📜 License
+## License
 
 This project is licensed under the MIT License. See LICENSE for more details.
