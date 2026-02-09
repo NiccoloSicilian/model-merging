@@ -165,7 +165,7 @@ def different_schedule_mlp_attn(layer_names):
                 attn_tot_layers += 1
             elif 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight' in name:
                 linear_tot_layers += 1
-    print("TOT Linear LAYERS: ",linear_tot_layers, "ATTN:", attn_tot_layers)
+    print("-----TOT Linear LAYERS: ",linear_tot_layers, "ATTN:", attn_tot_layers)
     for name in layer_names:
         # Skip non-trainable parameters
         if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
