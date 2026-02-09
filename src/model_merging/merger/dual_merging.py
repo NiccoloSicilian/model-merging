@@ -150,11 +150,11 @@ def log_mass(tot_layers, current_l):
 def linear_log_combined_mass(tot_layers, current_l):
     max_val = 0.5
     min_val = 0.01
-    half_tot = math.floor(tot_layers)/2
-    if current_l < tot_layers/2:
-        mass = min_val+current_l*(max_val/2 - min_val)/half_tot
+    frac_tot = math.floor(tot_layers)/4
+    if current_l < frac_tot:
+        mass = min_val+current_l*(max_val/4 - min_val)/frac_tot
     else:
-        mass = max_val/2 + (max_val - max_val/2)/np.log(half_tot) * np.log(current_l -half_tot + 1)
+        mass = max_val/4 + (max_val - max_val/4)/np.log(frac_tot) * np.log(current_l -frac_tot + 1)
     return mass
 def linear_mass_scheduler_per_transfblock(layer_names): #Asuming layers list ordered by execution
     block_id = 'n'
