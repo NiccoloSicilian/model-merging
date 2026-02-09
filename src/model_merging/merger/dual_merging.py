@@ -230,7 +230,7 @@ def build_duality_map(layer_names, grads):
     print("="*80)
     
     modules = []
-    masses = different_schedule_mlp_attn(layer_names)
+    masses = linear_mass_scheduler_per_transfblock(layer_names)
     for name in layer_names:
         # Skip non-trainable parameters
         if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
