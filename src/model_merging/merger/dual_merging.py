@@ -131,7 +131,7 @@ def compose(M_later, M_earlier):
 def uniform_mass(tot_layers, current_l):
     return 0.5
 def quad_mass(tot_layers, current_l):
-    mass = (current_l / tot_layers)**2 
+    mass = 0.5*(current_l / tot_layers)**2 +0.01
     return mass
 def cubic_mass(tot_layers, current_l):
     mass = (current_l / tot_layers)**3 * 0.5
@@ -158,6 +158,41 @@ def linear_log_combined_mass(tot_layers, current_l):
     else:
         mass = max_val/4 + (max_val - max_val/4)/np.log(frac_tot) * np.log(current_l -frac_tot + 1)
     return mass
+
+def different_schedule_mlp_attn(layer_names):
+    block_id = 'n'
+    masses = {}
+    linear_tot_layers = 0
+    attn_tot_layers = 0
+    ll = 1
+    al = 1
+    mass_value = 0.5
+    for name in layer_names:
+        if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
+                continue
+        if 'visual.conv1.weight' in name or( 'visual.proj' in name and 'out_proj' not in name) or 'visual.positional_embedding' in name:
+            linear_tot_layers += 1
+        elif 'visual.transformer.resblocks' in name and 'weight' in name:
+            if 'attn.in_proj_weight' in name or 'attn.out_proj.weight' in name: 
+                attn_tot_layers += 1
+            elif 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight' in name:
+                linear_tot_layers += 1
+    print("TOT Linear LAYERS: ", ll, "ATTN:", al)
+    for name in layer_names:
+        # Skip non-trainable parameters
+        if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
+            continue
+        if 'visual.conv1.weight' in name or( 'visual.proj' in name and 'out_proj' not in name) or 'visual.positional_embedding' in name:
+            masses[name] =quad_mass(linear_tot_layers,ll)
+            ll += 1
+        elif 'visual.transformer.resblocks' in name and 'weight' in name:
+            if 'attn.in_proj_weight' in name or 'attn.out_proj.weight' in name: 
+                masses[name] = linear_mass(attn_tot_layers, al)
+                al += 1
+            elif 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight' in name:
+                masses[name] = quad_mass(linear_tot_layers, ll)
+                ll += 1
+    return masses
 def linear_mass_scheduler_per_transfblock(layer_names): #Asuming layers list ordered by execution
     block_id = 'n'
     masses = {}
@@ -201,7 +236,7 @@ def build_duality_map(layer_names, grads):
     print("="*80)
     
     modules = []
-    masses = linear_mass_scheduler_per_transfblock(layer_names)
+    masses = different_schedule_mlp_attn(layer_names)
     for name in layer_names:
         # Skip non-trainable parameters
         if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
