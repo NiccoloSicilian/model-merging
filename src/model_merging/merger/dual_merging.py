@@ -137,7 +137,7 @@ def cubic_mass(tot_layers, current_l):
     mass = (current_l / tot_layers)**3 * 0.5
     return mass
 def linear_mass(tot_layers, current_l):
-    mass = 0.01 + current_l*(0.5/tot_layers)
+    mass = 0.01 + current_l*(0.5-0.01/tot_layers)
     return mass
 def log_mass(tot_layers, current_l):
     end_val = 0.5
@@ -165,20 +165,26 @@ def different_schedule_mlp_attn(layer_names):
                 attn_tot_layers += 1
             elif 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight' in name:
                 linear_tot_layers += 1
-    print("TOT Linear LAYERS: ", ll, "ATTN:", al)
+    print("TOT Linear LAYERS: ",linear_tot_layers, "ATTN:", attn_tot_layers)
     for name in layer_names:
         # Skip non-trainable parameters
         if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
             continue
         if 'visual.conv1.weight' in name or( 'visual.proj' in name and 'out_proj' not in name) or 'visual.positional_embedding' in name:
             masses[name] =quad_mass(linear_tot_layers,ll)
+            print("Linear index:", ll, masses[name])
+            
             ll += 1
         elif 'visual.transformer.resblocks' in name and 'weight' in name:
             if 'attn.in_proj_weight' in name or 'attn.out_proj.weight' in name: 
                 masses[name] = linear_mass(attn_tot_layers, al)
+                print("Attn index:", al, masses[name])
+                
                 al += 1
             elif 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight' in name:
                 masses[name] = quad_mass(linear_tot_layers, ll)
+                print("Linear index:", ll, masses[name])
+                
                 ll += 1
     return masses
 def linear_mass_scheduler_per_transfblock(layer_names): #Asuming layers list ordered by execution
