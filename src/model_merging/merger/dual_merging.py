@@ -171,7 +171,7 @@ def different_schedule_mlp_attn(layer_names):
         if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
             continue
         if 'visual.conv1.weight' in name or( 'visual.proj' in name and 'out_proj' not in name) or 'visual.positional_embedding' in name:
-            masses[name] =uniform_mass(linear_tot_layers,ll)
+            masses[name] =linear_mass(linear_tot_layers,ll)
             print("Linear index:", ll, masses[name])
             
             ll += 1
@@ -182,7 +182,7 @@ def different_schedule_mlp_attn(layer_names):
                 
                 al += 1
             elif 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight' in name:
-                masses[name] = uniform_mass(linear_tot_layers, ll)
+                masses[name] = linear_mass(linear_tot_layers, ll)
                 print("Linear index:", ll, masses[name])
                 
                 ll += 1
