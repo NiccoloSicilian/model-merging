@@ -231,6 +231,11 @@ def build_duality_map(layer_names, grads):
     
     modules = []
     masses = linear_mass_scheduler_per_transfblock(layer_names)
+    AttnBlock = {}
+    MlpBlock = {}
+    InitBlock= []
+    FinalBlock = {}
+    pattern = re.compile(r"resblocks\.(\d+)")
     for name in layer_names:
         # Skip non-trainable parameters
         if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
@@ -270,6 +275,32 @@ def build_duality_map(layer_names, grads):
             module = Module(masses[name], 1.0, dm, name)
             modules.append(module)
             print(f"✓ {name}: {layer_type} [Mass: {masses[name]}]")
+            if 'attn.in_proj_weight' in name or 'attn.out_proj.weight' in name:
+                match = pattern.search(name)
+                if match:
+                    block_id = int(match.group(1))
+                    print(block_id)
+                    if block_id not in blocks_dict:
+                        AttnBlock[block_id] = []
+                
+                    AttnBlock[block_id].append(module)
+            elif 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight' in name:
+                match = pattern.search(name)
+                if match:
+                    block_id = int(match.group(1))
+                    print(block_id)
+                    if block_id not in blocks_dict:
+                        MlpBlock[block_id] = []
+                
+                    MlpBlock[block_id].append(module)
+            elif 'visual.conv1.weight' in name or 'visual.positional_embedding' in name:
+                InitBlock.append(module)
+                print("Init Block", name)
+                
+            elif 'visual.proj' in name and 'out_proj' not in name:
+                FinalBlock.append(module)
+                print("Final Block", name)
+                
         else:
             print(f"⚠ {name}: Ignored")
     
