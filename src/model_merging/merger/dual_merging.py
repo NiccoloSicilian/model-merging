@@ -282,7 +282,7 @@ def build_duality_map(layer_names, grads):
                 if match:
                     block_id = int(match.group(1))
                     print(block_id)
-                    if block_id not in blocks_dict:
+                    if block_id not in AttnBlock:
                         AttnBlock[block_id] = []
                 
                     AttnBlock[block_id].append(module)
@@ -291,7 +291,7 @@ def build_duality_map(layer_names, grads):
                 if match:
                     block_id = int(match.group(1))
                     print(block_id)
-                    if block_id not in blocks_dict:
+                    if block_id not in MlpBlock:
                         MlpBlock[block_id] = []
                 
                     MlpBlock[block_id].append(module)
@@ -312,20 +312,20 @@ def build_duality_map(layer_names, grads):
         composed = AttnBlock[k][0]
         for i in range(1, len(AttnBlock[k])):
             composed = compose(AttnBlock[k][i], composed)
-        composed.set_sensitivity(2)
+        composed.set_sensitivity(composed.get_sensitivity()+1)
         AttnBlock_list.append(composed)
                              
     for k in MlpBlock:
         composed = MlpBlock[k][0]
         for i in range(1, len(MlpBlock[k])):
             composed = compose(MlpBlock[k][i], composed)
-        composed.set_sensitivity(2)
+        composed.set_sensitivity(composed.get_sensitivity()+1)
         MlpBlock_list.append(composed)
         
     final_comp = InitBlock 
-    for b in range(len(MlpBlock)):
-        final_comp.append(AttnBlock[b])
-        final_comp.append(MlpBlock[b])
+    for b in range(len(MlpBlock_list)):
+        final_comp.append(AttnBlock_list[b])
+        final_comp.append(MlpBlock_list[b])
     final_comp += FinalBlock
         
         
