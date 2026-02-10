@@ -68,6 +68,8 @@ class Module:
     
     def set_mass(self, mass):
         self.mass = mass
+    def set_sensitivity(self, sensitivity):
+        self.sensitivity = sensitivity
     
     def get_mass(self):
         return self.mass
@@ -234,7 +236,7 @@ def build_duality_map(layer_names, grads):
     AttnBlock = {}
     MlpBlock = {}
     InitBlock= []
-    FinalBlock = {}
+    FinalBlock = []
     pattern = re.compile(r"resblocks\.(\d+)")
     for name in layer_names:
         # Skip non-trainable parameters
@@ -303,6 +305,30 @@ def build_duality_map(layer_names, grads):
                 
         else:
             print(f"⚠ {name}: Ignored")
+    final_comp = []
+    AttnBlock_list = []
+    MlpBlock_list = []
+    for k in AttnBlock:
+        composed = AttnBlock[k][0]
+        for i in range(1, len(AttnBlock[k])):
+            composed = compose(AttnBlock[k][i], composed)
+        composed.set_sensitivity(2)
+        AttnBlock_list.append(composed)
+                             
+    for k in MlpBlock:
+        composed = MlpBlock[k][0]
+        for i in range(1, len(MlpBlock[k])):
+            composed = compose(MlpBlock[k][i], composed)
+        composed.set_sensitivity(2)
+        MlpBlock_list.append(composed)
+        
+    final_comp = InitBlock 
+    for b in range(len(MlpBlock)):
+        final_comp.append(AttnBlock[b])
+        final_comp.append(MlpBlock[b])
+    final_comp += FinalBlock
+        
+        
     
     # ========================================================================
     print(f"\n{'='*80}")
@@ -317,11 +343,11 @@ def build_duality_map(layer_names, grads):
         return None
     
     # Compose sequentially: later ∘ earlier
-    composed = modules[0]
+    composed = final_comp[0]
     print(f"Starting with: {composed.get_name()} [Mass: {composed.get_mass():.2f}]")
     
-    for i in range(1, len(modules)):
-        composed = compose(modules[i], composed)  # modules[i] ∘ composed
+    for i in range(1, len(final_comp)):
+        composed = compose(final_comp[i], composed)  # modules[i] ∘ composed
     
     # ========================================================================
     print(f"\n{'='*80}")
