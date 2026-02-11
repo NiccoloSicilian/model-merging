@@ -28,6 +28,59 @@ from pathlib import Path
 import torch
 from math import sqrt
 
+def compute_average_SAR(module_vec_flat, finetuned_models, datasets):
+    """
+    Computes the Spectral Analysis of Regularization (SAR) or similar projection metric.
+    Formula implemented: || U @ U.T @ W_ft ||_F / || W_ft ||_F
+    """
+    merged_svd_dict = {}
+
+    # 1. Pre-compute SVD (U component) for the merged/reference model
+    for k, v in module_vec_flat.items():
+        if v.dim() == 2:
+            # torch.linalg.svd returns U, S, Vh
+            # full_matrices=False is usually preferred for efficiency
+            U, S, Vh = torch.linalg.svd(v, full_matrices=False)
+            merged_svd_dict[k] = U
+
+    SAR = {k: 0.0 for k in module_vec_flat}
+    count = {k: 0 for k in module_vec_flat}
+
+    # 2. Iterate through datasets and models
+    for dataset in datasets:
+        if dataset not in finetuned_models:
+            continue
+            
+        for k, weight_ft in finetuned_models[dataset].items():
+            # Only process if we computed SVD for this layer (implies dim == 2)
+            if k in merged_svd_dict:
+                count[k] += 1
+                
+                U = merged_svd_dict[k]
+                
+                # --- CALCULATION FIXES ---
+                # 1. Use torch.linalg.norm with ord='fro' for Frobenius norm
+                # 2. Use @ for Matrix Multiplication (not *)
+                # 3. Optimization: U @ (U.T @ W) is faster than (U @ U.T) @ W
+                
+                # Project fine-tuned weight onto the subspace of the merged weight
+                # equivalent to: (U * U.T) * weight_ft
+                projected_weight = U @ (U.T @ weight_ft)
+                
+                numerator = torch.linalg.norm(projected_weight, ord='fro')
+                denominator = torch.linalg.norm(weight_ft, ord='fro')
+                
+                if denominator > 1e-9: # Avoid division by zero
+                    SAR[k] += (numerator / denominator).item()
+
+    # 3. Average the results
+    avg_SAR_per_layer = {}
+    for k in count:
+        if count[k] > 0:
+            avg_SAR_per_layer[k] = SAR[k] / count[k]
+
+    print("AVERAGE SAR PER LAYER:\n", avg_SAR_per_layer)
+    return avg_SAR_per_layer
 def linear_mod(g, name):
     """Apply Linear layer duality map (RMS→RMS operator norm)"""
     g_cpu = g.cpu()
@@ -207,16 +260,16 @@ def linear_mass_scheduler_per_transfblock(layer_names): #Asuming layers list ord
         if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
             continue
         if 'visual.conv1.weight' in name or( 'visual.proj' in name and 'out_proj' not in name) or 'visual.positional_embedding' in name:
-            masses[name] =quad_mass(tot_layers,l)
+            masses[name] =linear_mass(tot_layers,l)
             l += 1
         elif 'visual.transformer.resblocks' in name and 'weight' in name:
             if 'attn.in_proj_weight' in name or 'attn.out_proj.weight' in name or 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight' in name:
                 if name.split('resblocks.')[1].split('.')[0] == block_id: 
-                    masses[name] = quad_mass(tot_layers, l)
+                    masses[name] = linear_mass(tot_layers, l)
                     l += 1 
                 else:
                     block_id = name.split('resblocks.')[1].split('.')[0]
-                    masses[name] = quad_mass(tot_layers, l)
+                    masses[name] = linear_mass(tot_layers, l)
                     l += 1
     return masses
     
@@ -230,7 +283,7 @@ def build_duality_map(layer_names, grads):
     print("="*80)
     
     modules = []
-    masses = different_schedule_mlp_attn(layer_names)
+    masses =  linear_mass_scheduler_per_transfblock(layer_names)
     for name in layer_names:
         # Skip non-trainable parameters
         if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
@@ -416,6 +469,7 @@ class DualMerger(TaskVectorBasedMerger):
         # Get dualized vectors (already on CPU)
         
         module_vec_flat = module_net
+        compute_average_SAR(module_vec_flat, finetuned_models, datasets)
         # Move back to GPU only what we need
         for key in module_vec_flat:
             multi_task_vector_cpu[key] = module_vec_flat[key].to(self.device)
