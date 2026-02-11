@@ -325,7 +325,7 @@ def build_duality_map(layer_names, grads):
     final_comp = [(0,m) for m in InitBlock ]
     for b in range(len(MlpBlock_list)):
         final_comp.append((1,AttnBlock_list[b]))
-        final_comp.append((1,MlpBlock_list[b])))
+        final_comp.append((1,MlpBlock_list[b]))
     final_comp += [(0,m) for m in FinalBlock]
         
         
