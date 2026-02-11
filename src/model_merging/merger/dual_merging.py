@@ -107,7 +107,7 @@ def compose(M_later, M_earlier):
     total_mass = M_earlier.get_mass() + M_later.get_mass()
     composed_sensitivity = M_earlier.get_sensitivity() * M_later.get_sensitivity()
     composed_name = f"{M_later.get_name()}∘{M_earlier.get_name()}"
-    
+    print("Args: Meralier", M_earlier.get_mass(), "M_later: ", M_later.get_mass(), "later sens:",M_later.get_sensitivity())
     # Compute scaling factors (Equation 11)
     sensitivity_factor = 1.0 / M_later.get_sensitivity()
     ratio_earlier = M_earlier.get_mass() / total_mass
@@ -350,6 +350,7 @@ def build_duality_map(layer_names, grads):
         
         composed = compose(final_comp[i][1], composed)  # modules[i] ∘ composed
         if final_comp[i][0] == 1:
+            print("resetting sens for")
             composed.set_sensitivity(1)
     
     # ========================================================================
