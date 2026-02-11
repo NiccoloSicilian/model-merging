@@ -314,6 +314,7 @@ def build_duality_map(layer_names, grads):
             composed = compose(AttnBlock[k][i], composed)
         composed.set_sensitivity(sqrt(composed.get_sensitivity()**2+1))
         AttnBlock_list.append(composed)
+        AttnBlock_list.append(Module())
                              
     for k in sorted(MlpBlock.keys()):
         composed = MlpBlock[k][0]
@@ -322,11 +323,11 @@ def build_duality_map(layer_names, grads):
         composed.set_sensitivity(sqrt(composed.get_sensitivity()**2+1))
         MlpBlock_list.append(composed)
         
-    final_comp = InitBlock 
+    final_comp = [(0,m) for m in InitBlock ]
     for b in range(len(MlpBlock_list)):
-        final_comp.append(AttnBlock_list[b])
-        final_comp.append(MlpBlock_list[b])
-    final_comp += FinalBlock
+        final_comp.append((1,AttnBlock_list[b]))
+        final_comp.append((1,MlpBlock_list[b])))
+    final_comp += [(0,m) for m in FinalBlock]
         
         
     
@@ -343,11 +344,14 @@ def build_duality_map(layer_names, grads):
         return None
     
     # Compose sequentially: later ∘ earlier
-    composed = final_comp[0]
+    composed = final_comp[0][1]
     print(f"Starting with: {composed.get_name()} [Mass: {composed.get_mass():.2f}]")
     
     for i in range(1, len(final_comp)):
-        composed = compose(final_comp[i], composed)  # modules[i] ∘ composed
+        
+        composed = compose(final_comp[i][1], composed)  # modules[i] ∘ composed
+        if final_comp[i][0] == 1:
+            composed.set_sensitivity(1)
     
     # ========================================================================
     print(f"\n{'='*80}")
