@@ -314,7 +314,6 @@ def build_duality_map(layer_names, grads):
             composed = compose(AttnBlock[k][i], composed)
         composed.set_sensitivity(sqrt(composed.get_sensitivity()**2+1))
         AttnBlock_list.append(composed)
-        AttnBlock_list.append(Module())
                              
     for k in sorted(MlpBlock.keys()):
         composed = MlpBlock[k][0]
