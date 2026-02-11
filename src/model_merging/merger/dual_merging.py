@@ -109,7 +109,7 @@ def compose(M_later, M_earlier):
     composed_name = f"{M_later.get_name()}∘{M_earlier.get_name()}"
     print("Args: Meralier", M_earlier.get_mass(), "M_later: ", M_later.get_mass(), "later sens:",M_later.get_sensitivity())
     # Compute scaling factors (Equation 11)
-    sensitivity_factor = M_later.get_sensitivity()
+    sensitivity_factor = 1.0/M_later.get_sensitivity()
     ratio_earlier = M_earlier.get_mass() / total_mass
     ratio_later = M_later.get_mass() / total_mass
     
