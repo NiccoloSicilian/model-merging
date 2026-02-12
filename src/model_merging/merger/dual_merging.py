@@ -211,19 +211,19 @@ def linear_mass_scheduler_per_transfblock(layer_names): #Asuming layers list ord
         if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
             continue
         if 'visual.conv1.weight' in name or( 'visual.proj' in name and 'out_proj' not in name) or 'visual.positional_embedding' in name:
-            masses[name] =uniform_mass(tot_layers,l)
+            masses[name] =linear_mass(tot_layers,l)
             print("MASS:",masses[name], tot_layers, l )
             l += 1
         elif 'visual.transformer.resblocks' in name and 'weight' in name:
             if 'attn.in_proj_weight' in name or 'attn.out_proj.weight' in name or 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight' in name:
                 if name.split('resblocks.')[1].split('.')[0] == block_id: 
-                    masses[name] = uniform_mass(tot_layers, l)
+                    masses[name] = linear_mass(tot_layers, l)
                     print("MASS:",masses[name], tot_layers, l )
                     
                     l += 1 
                 else:
                     block_id = name.split('resblocks.')[1].split('.')[0]
-                    masses[name] = uniform_mass(tot_layers, l)
+                    masses[name] = linear_mass(tot_layers, l)
                     print("MASS:",masses[name], tot_layers, l )
                     
                     l += 1
@@ -319,14 +319,14 @@ def build_duality_map(layer_names, grads):
         composed = AttnBlock[k][0]
         for i in range(1, len(AttnBlock[k])):
             composed = compose(AttnBlock[k][i], composed)
-        composed.set_sensitivity(composed.get_sensitivity()+0.1)
+        composed.set_sensitivity(composed.get_sensitivity()+0.05)
         AttnBlock_list.append(composed)
                              
     for k in sorted(MlpBlock.keys()):
         composed = MlpBlock[k][0]
         for i in range(1, len(MlpBlock[k])):
             composed = compose(MlpBlock[k][i], composed)
-        composed.set_sensitivity(composed.get_sensitivity()+0.1)
+        composed.set_sensitivity(composed.get_sensitivity()+0.05)
         MlpBlock_list.append(composed)
         
     final_comp = [(0,m) for m in InitBlock ]
@@ -356,9 +356,11 @@ def build_duality_map(layer_names, grads):
     for i in range(1, len(final_comp)):
         
         composed = compose(final_comp[i][1], composed)  # modules[i] ∘ composed
+        '''
         if final_comp[i][0] == 1:
             print("resetting sens for")
             composed.set_sensitivity(1)
+        '''
     
     # ========================================================================
     print(f"\n{'='*80}")
