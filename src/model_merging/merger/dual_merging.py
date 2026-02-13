@@ -139,9 +139,7 @@ def cubic_mass(tot_layers, current_l):
     mass = (current_l / tot_layers)**3 * 0.5
     return mass
 def linear_mass(tot_layers, current_l):
-    mass = 0.5
-    if current_l < 4:
-        mass = 0.01 + current_l*((0.5-0.01)/tot_layers)
+    mass = 0.01 + current_l*((0.5-0.01)/tot_layers)
     return mass
 def log_mass(tot_layers, current_l):
     end_val = 0.5
@@ -152,9 +150,10 @@ def log_mass(tot_layers, current_l):
     mass = start_val + b * np.log(current_l)
     return mass
 def OneMOne_schedule(tot_layers, current_l):
-    mass = 0.5
     if current_l == 1 or current_l == tot_layers:
         mass = 1.0
+    else:
+        mass = linear_mass(tot_layers, current_l)
     return mass
 def different_schedule_mlp_attn(layer_names):
     block_id = 'n'
