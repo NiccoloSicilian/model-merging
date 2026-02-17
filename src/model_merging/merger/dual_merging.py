@@ -396,7 +396,8 @@ def build_duality_map(layer_names, grads,device):
     to_consider_name = []
     to_consider_grad = []
     for name in layer_names:
-        ...
+        if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
+            continue
         if 'visual.conv1.weight' in name:
             to_consider_name.append(name)
             to_consider_grad.append(grads[name].to(device))  # move to GPU here
