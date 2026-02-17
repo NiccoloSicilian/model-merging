@@ -31,47 +31,41 @@ from pathlib import Path
 import torch
 from math import sqrt
 ###NEW
-
 def svd_orthogonalize(M):
     """
     Computes the Polar Factor (U @ Vh) of matrix M using SVD.
-    This is the exact projection onto the Stiefel manifold (closest orthogonal matrix).
+    Exact projection onto the Stiefel manifold (closest orthogonal matrix).
     """
-    # full_matrices=False is crucial for non-square matrices
-    U, _, Vh = jnp.linalg.svd(M, full_matrices=False)
+    U, _, Vh = torch.linalg.svd(M, full_matrices=False)
     return U @ Vh
+
 
 class Linear(Atom):
     def __init__(self, fanout, fanin):
         super().__init__()
-        self.fanin  = fanin
+        self.fanin = fanin
         self.fanout = fanout
         self.smooth = True
         self.mass = 1
         self.sensitivity = 1
 
     def forward(self, x, w):
-        # x shape is [..., fanin]
-        weights = w[0]  # shape is [fanout, fanin]
-        return jnp.einsum("...ij,...j->...i", weights, x)
+        weights = w[0]  # [fanout, fanin]
+        return x @ weights.T
 
-    def initialize(self, key):
-        weight = jax.random.normal(key, shape=(self.fanout, self.fanin))
-        # Exact SVD orthogonalization
-        weight = svd_orthogonalize(weight) * jnp.sqrt(self.fanout / self.fanin)
+    def initialize(self, key=None):
+        weight = torch.randn(self.fanout, self.fanin)
+        weight = svd_orthogonalize(weight) * sqrt(self.fanout / self.fanin)
         return [weight]
 
     def project(self, w):
         weight = w[0]
-        # Project weights back to the scaled orthogonal manifold
-        weight = svd_orthogonalize(weight) * jnp.sqrt(self.fanout / self.fanin)
+        weight = svd_orthogonalize(weight) * sqrt(self.fanout / self.fanin)
         return [weight]
 
     def dualize(self, grad_w, target_norm=1.0):
         grad = grad_w[0]
-        # Map dual (gradient/task vector) to primal (weight space)
-        # Using SVD ensures we find the best orthogonal direction
-        d_weight = svd_orthogonalize(grad) * jnp.sqrt(self.fanout / self.fanin) * target_norm
+        d_weight = svd_orthogonalize(grad) * sqrt(self.fanout / self.fanin) * target_norm
         return [d_weight]
 
 
@@ -86,50 +80,39 @@ class Conv2D(Atom):
         self.sensitivity = 1
 
     def forward(self, x, w):
-        weights = w[0]  # shape [fanout, fanin, k, k]
-        # Using explicit dimension numbers for clarity: NHWC input, OIHW weights
-        return jax.lax.conv_general_dilated(
-            lhs=x,
-            rhs=weights,
-            window_strides=(1, 1),
-            padding='SAME',
-            dimension_numbers=('NHWC', 'OIHW', 'NHWC')
-        )
+        weights = w[0]  # [fanout, fanin, k, k]
+        return torch.nn.functional.conv2d(x, weights, padding='same')
 
-    def initialize(self, key):
-        weight = jax.random.normal(key, shape=(self.fanout, self.fanin, self.kernel_size, self.kernel_size))
-        
-        # Apply SVD orthogonalization to each k*k slice independently
-        # vmap over axes 2 and 3 (the kernel spatial dimensions)
-        ortho_map = jax.vmap(jax.vmap(svd_orthogonalize, in_axes=2, out_axes=2), in_axes=2, out_axes=2)
-        weight = ortho_map(weight)
-        
-        # Scale factor from the paper: 1/k^2 * sqrt(dout/din)
-        scale = (1.0 / (self.kernel_size ** 2)) * jnp.sqrt(self.fanout / self.fanin)
+    def initialize(self, key=None):
+        weight = torch.randn(self.fanout, self.fanin, self.kernel_size, self.kernel_size)
+        weight = self._ortho_spatial(weight)
+        scale = (1.0 / self.kernel_size ** 2) * sqrt(self.fanout / self.fanin)
         return [weight * scale]
 
     def project(self, w):
         weight = w[0]
-        ortho_map = jax.vmap(jax.vmap(svd_orthogonalize, in_axes=2, out_axes=2), in_axes=2, out_axes=2)
-        weight = ortho_map(weight)
-        scale = (1.0 / (self.kernel_size ** 2)) * jnp.sqrt(self.fanout / self.fanin)
+        weight = self._ortho_spatial(weight)
+        scale = (1.0 / self.kernel_size ** 2) * sqrt(self.fanout / self.fanin)
         return [weight * scale]
 
     def dualize(self, grad_w, target_norm=1.0):
         grad = grad_w[0]
-        
-        # SVD on spatial slices
-        ortho_map = jax.vmap(jax.vmap(svd_orthogonalize, in_axes=2, out_axes=2), in_axes=2, out_axes=2)
-        d_weight = ortho_map(grad)
-        
-        scale = (1.0 / (self.kernel_size ** 2)) * jnp.sqrt(self.fanout / self.fanin)
+        d_weight = self._ortho_spatial(grad)
+        scale = (1.0 / self.kernel_size ** 2) * sqrt(self.fanout / self.fanin)
         return [d_weight * scale * target_norm]
+
+    def _ortho_spatial(self, weight):
+        """SVD orthogonalize each [fanout, fanin] slice over spatial dims."""
+        k = self.kernel_size
+        # weight shape: [fanout, fanin, k, k]
+        result = torch.zeros_like(weight)
+        for i in range(k):
+            for j in range(k):
+                result[:, :, i, j] = svd_orthogonalize(weight[:, :, i, j])
+        return result
 
 
 class Embed(Atom):
-    # Note: Embed usually defines orthogonality row-wise (spherical), 
-    # not as a matrix SVD. The original implementation was mathematically correct
-    # for spherical embeddings. I kept it stable here.
     def __init__(self, d_embed, num_embed):
         super().__init__()
         self.num_embed = num_embed
@@ -139,26 +122,22 @@ class Embed(Atom):
         self.sensitivity = 1
 
     def forward(self, x, w):
-        weights = w[0]
-        return weights[x]
+        return w[0][x]
 
-    def initialize(self, key):
-        weight = jax.random.normal(key, shape=(self.num_embed, self.d_embed))
-        # Project rows to sphere
-        weight = weight / jnp.linalg.norm(weight, axis=1, keepdims=True) * jnp.sqrt(self.d_embed)
+    def initialize(self, key=None):
+        weight = torch.randn(self.num_embed, self.d_embed)
+        weight = weight / weight.norm(dim=1, keepdim=True) * sqrt(self.d_embed)
         return [weight]
 
     def project(self, w):
         weight = w[0]
-        # Project rows to sphere
-        weight = weight / jnp.linalg.norm(weight, axis=1, keepdims=True) * jnp.sqrt(self.d_embed)
+        weight = weight / weight.norm(dim=1, keepdim=True) * sqrt(self.d_embed)
         return [weight]
 
     def dualize(self, grad_w, target_norm=1.0):
         grad = grad_w[0]
-        # The dual of the sphere constraint is normalizing the gradient direction
-        d_weight = grad / jnp.linalg.norm(grad, axis=1, keepdims=True) * jnp.sqrt(self.d_embed) * target_norm
-        d_weight = jnp.nan_to_num(d_weight)
+        norms = grad.norm(dim=1, keepdim=True).clamp(min=1e-9)
+        d_weight = grad / norms * sqrt(self.d_embed) * target_norm
         return [d_weight]
 def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_size=16, input_channels=3):
     mlp_width = 4 * d_embed
@@ -450,22 +429,9 @@ def build_duality_map(layer_names, grads):
             print(f"⚠ {name}: Ignored")
     print(f"Total Atomic Modules: {m.atoms} {m.mass}, To Consider: {len(to_consider_grad)}, {len(to_consider_name)}")
 
-    # Convert PyTorch tensors → JAX arrays before calling modula's dualize
-    to_consider_grad_jax = [
-        jnp.array(g.detach().cpu().numpy()) for g in to_consider_grad
-    ]
-
-    to_consider_dualized_grad_jax = m.dualize(to_consider_grad_jax)
-    print(f"Dualized: {len(to_consider_dualized_grad_jax)}")
-
-    # Convert JAX arrays → PyTorch tensors for the rest of the pipeline
-    to_consider_dualized_grad = []
-    for g in to_consider_dualized_grad_jax:
-        jax.block_until_ready(g)                          # force JAX to finish
-        arr = np.asarray(g)                               # zero-copy if possible
-        to_consider_dualized_grad.append(
-            torch.from_numpy(arr.copy()).contiguous()     # .copy() detaches from JAX memory
-        )
+    # Dualize directly in PyTorch — no JAX conversion needed
+    to_consider_dualized_grad = m.dualize(to_consider_grad)
+    print(f"Dualized: {len(to_consider_dualized_grad)}")
 
     # Return the dictionary of all dualized gradients
     return dict(zip(to_consider_name, to_consider_dualized_grad))
