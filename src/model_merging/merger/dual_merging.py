@@ -19,8 +19,6 @@ from model_merging.merging.structured import (
 import re
 import torch
 import gc
-import jax
-import jax.numpy as jnp
 from modula.abstract import *
 from modula.bond import *
 
