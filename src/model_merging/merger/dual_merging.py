@@ -594,7 +594,7 @@ class DualMerger(TaskVectorBasedMerger):
         module_net = build_duality_map(ordered_keys, multi_task_vector_cpu, self.device)  # ← add self.device
         module_vec_flat = module_net
 
-        compute_average_SAR(module_vec_flat, finetuned_models, datasets)
+        #compute_average_SAR(module_vec_flat, finetuned_models, datasets)
 
         # Update dualized keys (come back as GPU tensors from build_duality_map)
         for key in module_vec_flat:
