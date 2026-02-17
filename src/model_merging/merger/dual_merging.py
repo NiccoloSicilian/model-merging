@@ -381,7 +381,7 @@ def linear_mass_scheduler_per_transfblock(layer_names): #Asuming layers list ord
                     l += 1
     return masses
     
-def build_duality_map(layer_names, grads):
+def build_duality_map(layer_names, grads,device):
     """
     Build modular duality map assuming layers are in execution order.
     Applies composition sequentially: layer_N ∘ ... ∘ layer_1 ∘ layer_0
@@ -396,33 +396,29 @@ def build_duality_map(layer_names, grads):
     to_consider_name = []
     to_consider_grad = []
     for name in layer_names:
-        # Skip non-trainable parameters
-        if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
-            continue
-
-        # Determine layer type and apply corresponding duality map
+        ...
         if 'visual.conv1.weight' in name:
             to_consider_name.append(name)
-            to_consider_grad.append(grads[name])
+            to_consider_grad.append(grads[name].to(device))  # move to GPU here
         elif 'visual.proj' in name and 'out_proj' not in name:
             to_consider_name.append(name)
-            to_consider_grad.append(grads[name])
+            to_consider_grad.append(grads[name].to(device))
         elif 'visual.positional_embedding' in name:
             to_consider_name.append(name)
-            to_consider_grad.append(grads[name])
+            to_consider_grad.append(grads[name].to(device))
         elif 'visual.transformer.resblocks' in name and 'weight' in name:
             if 'attn.in_proj_weight' in name:
                 to_consider_name.append(name)
-                to_consider_grad.append(grads[name])
+                to_consider_grad.append(grads[name].to(device))
             elif 'attn.out_proj.weight' in name:
                 to_consider_name.append(name)
-                to_consider_grad.append(grads[name])
+                to_consider_grad.append(grads[name].to(device))
             elif 'mlp.c_fc.weight' in name:
                 to_consider_name.append(name)
-                to_consider_grad.append(grads[name])
+                to_consider_grad.append(grads[name].to(device))
             elif 'mlp.c_proj.weight' in name:
                 to_consider_name.append(name)
-                to_consider_grad.append(grads[name])
+                to_consider_grad.append(grads[name].to(device))
         else:
             print(f"⚠ {name}: Ignored")
     print(f"Total Atomic Modules: {m.atoms} {m.mass}, To Consider: {len(to_consider_grad)}, {len(to_consider_name)}")
@@ -589,21 +585,21 @@ class DualMerger(TaskVectorBasedMerger):
         if self.device.type == "cuda":
             torch.cuda.empty_cache()
             gc.collect()
-       
+            
         raw_keys = list(multi_task_vector_cpu.keys())
         ordered_keys = get_vit_topological_order(raw_keys)
         
         print(ordered_keys)
-        module_net = build_duality_map(ordered_keys, multi_task_vector_cpu)
+        module_net = build_duality_map(ordered_keys, multi_task_vector_cpu, self.device)  # ← add self.device
         module_vec_flat = module_net
 
         compute_average_SAR(module_vec_flat, finetuned_models, datasets)
 
-        # Update dualized keys
+        # Update dualized keys (come back as GPU tensors from build_duality_map)
         for key in module_vec_flat:
-            multi_task_vector_cpu[key] = module_vec_flat[key].contiguous()
+            multi_task_vector_cpu[key] = module_vec_flat[key]
 
-        # Move everything to device in one clean pass
+        # Move everything to device in one clean pass (.to() ensures contiguous)
         multi_task_vector_cpu = {
             k: v.to(self.device) for k, v in multi_task_vector_cpu.items()
         }
@@ -627,10 +623,8 @@ class DualMerger(TaskVectorBasedMerger):
             merged_encoder,
             coefficient=coefficient,
         )
-
         
         return merged_encoder
-
 
 class DualCommonTaskSpecificMerger(TaskVectorBasedMerger):
     def __init__(
