@@ -402,8 +402,7 @@ def linear_mass_scheduler_per_transfblock(layer_names): #Asuming layers list ord
                     
                     l += 1
     return masses
-    
-def build_duality_map(layer_names, grads,device):
+def build_duality_map(layer_names, grads, device):
     """
     Build modular duality map assuming layers are in execution order.
     Applies composition sequentially: layer_N ∘ ... ∘ layer_1 ∘ layer_0
@@ -412,8 +411,6 @@ def build_duality_map(layer_names, grads,device):
     print("STEP 1: Creating Atomic Modules with Dualized Gradients")
     print("="*80)
     m = ViT_B_16()
-    #modules = []
-    #masses = linear_mass_scheduler_per_transfblock(layer_names)
 
     to_consider_name = []
     to_consider_grad = []
@@ -422,7 +419,7 @@ def build_duality_map(layer_names, grads,device):
             continue
         if 'visual.conv1.weight' in name:
             to_consider_name.append(name)
-            to_consider_grad.append(grads[name].to(device))  # move to GPU here
+            to_consider_grad.append(grads[name].to(device))
         elif 'visual.proj' in name and 'out_proj' not in name:
             to_consider_name.append(name)
             to_consider_grad.append(grads[name].to(device))
@@ -444,6 +441,11 @@ def build_duality_map(layer_names, grads,device):
                 to_consider_grad.append(grads[name].to(device))
         else:
             print(f"⚠ {name}: Ignored")
+            continue
+
+        # Print first 100 values of the gradient just appended
+        print(f"  [PRE-DUALIZE] {name}: {to_consider_grad[-1].flatten()[:100].tolist()}")
+
     print(f"Total Atomic Modules: {m.atoms} {m.mass}, To Consider: {len(to_consider_grad)}, {len(to_consider_name)}")
 
     # Dualize directly in PyTorch — no JAX conversion needed
