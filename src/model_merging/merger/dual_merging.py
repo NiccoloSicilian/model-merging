@@ -68,8 +68,9 @@ class LinearSVD(Atom):
         d_weight = svd_orthogonalize(grad) * scalar_factor
         
         # 3. Print Debug Info
-        print(f"\n[LinearSVD] Scalar Factor: {scalar_factor}")
+        print(f"\n[LinearSVD] Scalar Factor: {self.fanout } {self.fanin}")
         print(f"[LinearSVD] First 100 elements:\n{grad.flatten()[:100]}")
+    
         
         return [d_weight]
 
@@ -112,7 +113,7 @@ class Conv2DSVD(Atom):
         d_weight = d_weight_ortho * scalar_factor
         
         # 3. Print Debug Info
-        print(f"\n[Conv2DSVD] Scalar Factor: {scalar_factor}")
+        print(f"\n[Conv2DSVD] Scalar Factor:  {self.fanout } {self.fanin} {self.kernel_size}")
         print(f"[Conv2DSVD] First 100 elements:\n{grad.flatten()[:100]}")
         
         return [d_weight]
@@ -202,7 +203,7 @@ def linear_mod(g, name):
     g_cpu = g.cpu()
 
     # --- DEBUG: Print Raw Input ---
-    print(f"\n[linear_mod RAW INPUT] {name}")
+    print(f"\n[linear_mod RAW INPUT] {name} {g_cpu.shape[0]} {g_cpu.shape[1]}")
     print(f"First 100 elements:\n{g_cpu.flatten()[:100].tolist()}")
     # ------------------------------
 
