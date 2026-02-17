@@ -29,22 +29,19 @@ from pathlib import Path
 import torch
 from math import sqrt
 ###NEW
+# Assuming svd_orthogonalize is defined elsewhere or imported
+# If strictly using PyTorch SVD as discussed:
 def svd_orthogonalize(M):
-    """
-    Computes the Polar Factor (U @ Vh) of matrix M using SVD.
-    Exact projection onto the Stiefel manifold (closest orthogonal matrix).
-    """
     U, _, Vh = torch.linalg.svd(M, full_matrices=False)
     return U @ Vh
 
-
-class Linear(Atom):
+class LinearSVD(Atom):
     def __init__(self, fanout, fanin):
         super().__init__()
         self.fanin = fanin
         self.fanout = fanout
         self.smooth = True
-        self.mass = 1
+        self.mass = 0.5
         self.sensitivity = 1
 
     def forward(self, x, w):
@@ -52,9 +49,8 @@ class Linear(Atom):
         return x @ weights.T
 
     def initialize(self, key=None):
-        weight = torch.randn(self.fanout, self.fanin)
-        weight = svd_orthogonalize(weight) * sqrt(self.fanout / self.fanin)
-        return [weight]
+        print("No need init")
+        return None
 
     def project(self, w):
         weight = w[0]
@@ -63,18 +59,29 @@ class Linear(Atom):
 
     def dualize(self, grad_w, target_norm=1.0):
         grad = grad_w[0]
-        d_weight = svd_orthogonalize(grad) * sqrt(self.fanout / self.fanin) * target_norm
+        
+        # 1. Calculate the scalar factor
+        scalar_factor = sqrt(self.fanout / self.fanin) * target_norm
+        
+        # 2. Compute the dual weight
+        # svd_orthogonalize returns the "direction", scalar_factor applies the "magnitude"
+        d_weight = svd_orthogonalize(grad) * scalar_factor
+        
+        # 3. Print Debug Info
+        print(f"\n[LinearSVD] Scalar Factor: {scalar_factor}")
+        print(f"[LinearSVD] First 100 elements:\n{d_weight.flatten()[:100]}")
+        
         return [d_weight]
 
 
-class Conv2D(Atom):
+class Conv2DSVD(Atom):
     def __init__(self, fanout, fanin, kernel_size):
         super().__init__()
         self.fanin = fanin
         self.fanout = fanout
         self.kernel_size = kernel_size
         self.smooth = True
-        self.mass = 1
+        self.mass = 0.5
         self.sensitivity = 1
 
     def forward(self, x, w):
@@ -95,9 +102,20 @@ class Conv2D(Atom):
 
     def dualize(self, grad_w, target_norm=1.0):
         grad = grad_w[0]
-        d_weight = self._ortho_spatial(grad)
-        scale = (1.0 / self.kernel_size ** 2) * sqrt(self.fanout / self.fanin)
-        return [d_weight * scale * target_norm]
+        
+        # 1. Calculate the scalar factor
+        # The paper defines this specifically for Conv2D to normalize spatial dimensions
+        scalar_factor = (1.0 / self.kernel_size ** 2) * sqrt(self.fanout / self.fanin) * target_norm
+        
+        # 2. Compute the dual weight
+        d_weight_ortho = self._ortho_spatial(grad)
+        d_weight = d_weight_ortho * scalar_factor
+        
+        # 3. Print Debug Info
+        print(f"\n[Conv2DSVD] Scalar Factor: {scalar_factor}")
+        print(f"[Conv2DSVD] First 100 elements:\n{d_weight.flatten()[:100]}")
+        
+        return [d_weight]
 
     def _ortho_spatial(self, weight):
         """SVD orthogonalize each [fanout, fanin] slice over spatial dims."""
@@ -110,13 +128,13 @@ class Conv2D(Atom):
         return result
 
 
-class Embed(Atom):
+class EmbedSVD(Atom):
     def __init__(self, d_embed, num_embed):
         super().__init__()
         self.num_embed = num_embed
         self.d_embed = d_embed
         self.smooth = True
-        self.mass = 1
+        self.mass = 0.5
         self.sensitivity = 1
 
     def forward(self, x, w):
@@ -134,8 +152,19 @@ class Embed(Atom):
 
     def dualize(self, grad_w, target_norm=1.0):
         grad = grad_w[0]
+        
+        # 1. Calculate the global scalar factor
+        scalar_factor = sqrt(self.d_embed) * target_norm
+        
+        # 2. Compute the dual weight
+        # Note: Embed uses row-wise normalization (Spherical projection), not matrix SVD
         norms = grad.norm(dim=1, keepdim=True).clamp(min=1e-9)
-        d_weight = grad / norms * sqrt(self.d_embed) * target_norm
+        d_weight = (grad / norms) * scalar_factor
+        
+        # 3. Print Debug Info
+        print(f"\n[EmbedSVD] Scalar Factor: {scalar_factor}")
+        print(f"[EmbedSVD] First 100 elements:\n{d_weight.flatten()[:100]}")
+        
         return [d_weight]
 def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_size=16, input_channels=3):
     mlp_width = 4 * d_embed
@@ -144,25 +173,19 @@ def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
     # 1. Patch Embed (conv1 in checkpoint)
     # Note: Checkpoint shows [768, 3, 16, 16] which is a Conv layer
     
-    conv1 = Conv2D(fanin=input_channels, fanout=d_embed,kernel_size=patch_size)
-    conv1.tare(0.5)
+    conv1 = Conv2DSVD(fanin=input_channels, fanout=d_embed,kernel_size=patch_size)
     # 2. Positional & Class Embedding
-    visual_pos_embed = Linear(197, d_embed)
-    visual_pos_embed.tare(0.5)
+    visual_pos_embed = LinearSVD(197, d_embed)
     
     # Pre-transformer norm (ln_pre)
 
     # 3. Transformer Blocks
-    a1 = Linear(d_embed, d_embed) 
-    a1.tare(0.5)
-    a2 = Linear(3*d_embed, d_embed) 
-    a2.tare(0.5)
+    a1 = LinearSVD(d_embed, d_embed) 
+    a2 = LinearSVD(3*d_embed, d_embed) 
     att = a1@ a2
 
-    m1 = Linear(d_embed, mlp_width)
-    m1.tare(0.5)
-    m2 = Linear(mlp_width, d_embed)
-    m2.tare(0.5)
+    m1 = LinearSVD(d_embed, mlp_width)
+    m2 = LinearSVD(mlp_width, d_embed)
     mlp = m1@ GeLU() @ m2
     
     # Residual paths
@@ -171,8 +194,7 @@ def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
     transformer = (mlp_block @ att_block) ** num_blocks
 
     # 4. Final Head (ln_post and proj)
-    proj = Linear(d_embed, num_classes)
-    proj.tare(0.5)
+    proj = LinearSVD(d_embed, num_classes)
     # Correct Flow: Input -> Patch -> Pos -> ln_pre -> Transformer -> ln_post -> Head
     return proj @ transformer  @ visual_pos_embed @ conv1
 ###
