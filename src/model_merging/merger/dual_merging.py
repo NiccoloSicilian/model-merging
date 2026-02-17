@@ -546,15 +546,14 @@ class DualMerger(TaskVectorBasedMerger):
 
         compute_average_SAR(module_vec_flat, finetuned_models, datasets)
 
-        # Update only the dualized keys, ensure all values end up on device and contiguous
+        # Update dualized keys
         for key in module_vec_flat:
-            multi_task_vector_cpu[key] = module_vec_flat[key].contiguous().to(self.device)
+            multi_task_vector_cpu[key] = module_vec_flat[key].contiguous()
 
-        # Also move non-dualized keys (biases, ln_, etc.) to device
-        for key in multi_task_vector_cpu:
-            if not isinstance(multi_task_vector_cpu[key], torch.Tensor) or \
-               multi_task_vector_cpu[key].device != self.device:
-                multi_task_vector_cpu[key] = multi_task_vector_cpu[key].to(self.device)
+        # Move everything to device in one clean pass
+        multi_task_vector_cpu = {
+            k: v.to(self.device) for k, v in multi_task_vector_cpu.items()
+        }
 
         del module_vec_flat
         gc.collect()
