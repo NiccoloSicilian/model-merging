@@ -67,9 +67,6 @@ class LinearSVD(Atom):
         # svd_orthogonalize returns the "direction", scalar_factor applies the "magnitude"
         d_weight = svd_orthogonalize(grad) * scalar_factor
         
-        # 3. Print Debug Info
-        print(f"\n[LinearSVD] Scalar Factor: {self.fanout } {self.fanin}")
-        print(f"[LinearSVD] First 100 elements:\n{grad.flatten()[:100]}")
     
         
         return [d_weight]
@@ -113,8 +110,6 @@ class Conv2DSVD(Atom):
         d_weight = d_weight_ortho * scalar_factor
         
         # 3. Print Debug Info
-        print(f"\n[Conv2DSVD] Scalar Factor:  {self.fanout } {self.fanin} {self.kernel_size}")
-        print(f"[Conv2DSVD] First 100 elements:\n{grad.flatten()[:100]}")
         
         return [d_weight]
 
@@ -161,10 +156,6 @@ class EmbedSVD(Atom):
         # Note: Embed uses row-wise normalization (Spherical projection), not matrix SVD
         norms = grad.norm(dim=1, keepdim=True).clamp(min=1e-9)
         d_weight = (grad / norms) * scalar_factor
-        
-        # 3. Print Debug Info
-        print(f"\n[EmbedSVD] Scalar Factor: {scalar_factor}")
-        print(f"[EmbedSVD] First 100 elements:\n{grad.flatten()[:100]}")
         
         return [d_weight]
 def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_size=16, input_channels=3):
