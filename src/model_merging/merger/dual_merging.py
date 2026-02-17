@@ -198,10 +198,15 @@ def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
     # Correct Flow: Input -> Patch -> Pos -> ln_pre -> Transformer -> ln_post -> Head
     return proj @ transformer  @ visual_pos_embed @ conv1
 ###
-
 def linear_mod(g, name):
     """Apply Linear layer duality map (RMS→RMS operator norm)"""
     g_cpu = g.cpu()
+
+    # --- DEBUG: Print Raw Input ---
+    print(f"\n[linear_mod RAW INPUT] {name}")
+    print(f"First 100 elements:\n{g_cpu.flatten()[:100].tolist()}")
+    # ------------------------------
+
     U, S, Vt = torch.linalg.svd(g_cpu, full_matrices=False)
     result = U @ Vt * sqrt(g_cpu.shape[0] / g_cpu.shape[1])
     return {name: result}
@@ -210,20 +215,24 @@ def linear_mod(g, name):
 def conv2d_mod(g, name):
     """Apply Conv2D layer duality map (max RMS→RMS over kernel indices)"""
     g_cpu = g.cpu()
+
+    # --- DEBUG: Print Raw Input ---
+    print(f"\n[conv2d_mod RAW INPUT] {name}")
+    print(f"First 100 elements:\n{g_cpu.flatten()[:100].tolist()}")
+    # ------------------------------
+
     dout, din, k, _ = g_cpu.shape
-    
+
     scaling_factor = (1.0 / k**2) * sqrt(dout / din)
     transformed = torch.zeros_like(g_cpu)
-    
+
     for i in range(k):
         for j in range(k):
             slice_matrix = g_cpu[:, :, i, j]
             U, S, Vt = torch.linalg.svd(slice_matrix, full_matrices=False)
             transformed[:, :, i, j] = scaling_factor * (U @ Vt)
-    
+
     return {name: transformed}
-
-
 
 class Module:
     def __init__(self, mass, sensitivity, grads_dict, name):
