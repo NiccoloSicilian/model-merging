@@ -769,8 +769,9 @@ class DualMerger(TaskVectorBasedMerger):
         ordered_keys = get_vit_topological_order(raw_keys)
         
         print(ordered_keys)
-        module_net = build_duality_map(ordered_keys, multi_task_vector_cpu, self.device)  # ← add self.device
         module_foo  = build_duality_map_my(ordered_keys, multi_task_vector_cpu)
+        
+        module_net = build_duality_map(ordered_keys, multi_task_vector_cpu, self.device)  # ← add self.device
         module_vec_flat = module_net
 
         #compute_average_SAR(module_vec_flat, finetuned_models, datasets)
