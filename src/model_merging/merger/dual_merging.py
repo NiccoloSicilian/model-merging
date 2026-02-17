@@ -198,6 +198,7 @@ def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
     # Correct Flow: Input -> Patch -> Pos -> ln_pre -> Transformer -> ln_post -> Head
     return proj @ transformer  @ visual_pos_embed @ conv1
 ###
+
 def linear_mod(g, name):
     """Apply Linear layer duality map (RMS→RMS operator norm)"""
     g_cpu = g.cpu()
@@ -221,6 +222,7 @@ def conv2d_mod(g, name):
             transformed[:, :, i, j] = scaling_factor * (U @ Vt)
     
     return {name: transformed}
+
 
 
 class Module:
@@ -402,6 +404,150 @@ def linear_mass_scheduler_per_transfblock(layer_names): #Asuming layers list ord
                     
                     l += 1
     return masses
+def build_duality_map_my(layer_names, grads):
+    """
+    Build modular duality map assuming layers are in execution order.
+    Applies composition sequentially: layer_N ∘ ... ∘ layer_1 ∘ layer_0
+    """
+    print("\n" + "="*80)
+    print("STEP 1: Creating Atomic Modules with Dualized Gradients")
+    print("="*80)
+    
+    modules = []
+    masses = linear_mass_scheduler_per_transfblock(layer_names)
+    AttnBlock = {}
+    MlpBlock = {}
+    InitBlock= []
+    FinalBlock = []
+    pattern = re.compile(r"resblocks\.(\d+)")
+    for name in layer_names:
+        # Skip non-trainable parameters
+        if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
+            continue
+        
+        dm = None
+        
+        # Determine layer type and apply corresponding duality map
+        if 'visual.conv1.weight' in name:
+            dm = conv2d_mod(grads[name], name)
+            layer_type = "Conv2D"
+        elif 'visual.proj' in name and 'out_proj' not in name:
+            dm = linear_mod(grads[name], name)
+            layer_type = "Linear (visual proj)"
+      
+        elif 'visual.positional_embedding' in name:
+            dm = linear_mod(grads[name], name)
+            layer_type = "Linear (pos emb)"
+           
+        elif 'visual.transformer.resblocks' in name and 'weight' in name:
+            if 'attn.in_proj_weight' in name:
+                dm = linear_mod(grads[name], name)
+                layer_type = "Linear (attn in)"
+            elif 'attn.out_proj.weight' in name:
+                dm = linear_mod(grads[name], name)
+                layer_type = "Linear (attn out)"
+            elif 'mlp.c_fc.weight' in name:
+                dm = linear_mod(grads[name], name)
+                layer_type = "Linear (mlp fc)"
+            elif 'mlp.c_proj.weight' in name:
+                dm = linear_mod(grads[name], name)
+                layer_type = "Linear (mlp proj)"
+
+        
+        # Create module if duality map was computed
+        if dm is not None:
+            print(f"  [PRE-DUALIZE] {name}: {grads[name].flatten()[:100].tolist()}")
+            module = Module(masses[name], 1.0, dm, name)
+            modules.append(module)
+            print(f"✓ {name}: {layer_type} [Mass: {masses[name]}]")
+            if 'attn.in_proj_weight' in name or 'attn.out_proj.weight' in name:
+                match = pattern.search(name)
+                if match:
+                    block_id = int(match.group(1))
+                    print(block_id)
+                    if block_id not in AttnBlock:
+                        AttnBlock[block_id] = []
+                
+                    AttnBlock[block_id].append(module)
+            elif 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight' in name:
+                match = pattern.search(name)
+                if match:
+                    block_id = int(match.group(1))
+                    print(block_id)
+                    if block_id not in MlpBlock:
+                        MlpBlock[block_id] = []
+                
+                    MlpBlock[block_id].append(module)
+            elif 'visual.conv1.weight' in name or 'visual.positional_embedding' in name:
+                InitBlock.append(module)
+                print("Init Block", name)
+                
+            elif 'visual.proj' in name and 'out_proj' not in name:
+                FinalBlock.append(module)
+                print("Final Block", name)
+                
+        else:
+            print(f"⚠ {name}: Ignored")
+    final_comp = []
+    AttnBlock_list = []
+    MlpBlock_list = []
+    for k in sorted(AttnBlock.keys()):
+        composed = AttnBlock[k][0]
+        for i in range(1, len(AttnBlock[k])):
+            composed = compose(AttnBlock[k][i], composed)
+        composed.set_sensitivity(composed.get_sensitivity()+0.1)
+        AttnBlock_list.append(composed)
+                             
+    for k in sorted(MlpBlock.keys()):
+        composed = MlpBlock[k][0]
+        for i in range(1, len(MlpBlock[k])):
+            composed = compose(MlpBlock[k][i], composed)
+        composed.set_sensitivity(composed.get_sensitivity()+0.1)
+        MlpBlock_list.append(composed)
+        
+    final_comp = [(0,m) for m in InitBlock ]
+    for b in range(len(MlpBlock_list)):
+        final_comp.append((1,AttnBlock_list[b]))
+        final_comp.append((1,MlpBlock_list[b]))
+    final_comp += [(0,m) for m in FinalBlock]
+        
+        
+    
+    # ========================================================================
+    print(f"\n{'='*80}")
+    print("STEP 2: Composing All Modules Sequentially")
+    print("="*80)
+    print(f"Total modules to compose: {len(modules)}")
+    print(f"Composition: {modules[-1].get_name()} ∘ ... ∘ {modules[0].get_name()}\n")
+    # ========================================================================
+    
+    if len(modules) == 0:
+        print("ERROR: No modules created!")
+        return None
+    
+    # Compose sequentially: later ∘ earlier
+    composed = final_comp[0][1]
+    print(f"Starting with: {composed.get_name()} [Mass: {composed.get_mass():.2f}]")
+    
+    for i in range(1, len(final_comp)):
+        
+        composed = compose(final_comp[i][1], composed)  # modules[i] ∘ composed
+        if final_comp[i][0] == 1:
+            print("resetting sens for")
+            composed.set_sensitivity(1)
+    
+    # ========================================================================
+    print(f"\n{'='*80}")
+    print("FINAL COMPOSED MODULE")
+    print(f"{'='*80}")
+    print(f"Name:        {composed.get_name()}")
+    print(f"Total Mass:  {composed.get_mass():.2f}")
+    print(f"Sensitivity: {composed.get_sensitivity():.2f}")
+    print(f"Gradients:   {len(composed.get_gradients())} layers")
+    print(f"{'='*80}\n")
+    
+    # Return the dictionary of all dualized gradients
+    return composed.get_gradients()
 def build_duality_map(layer_names, grads, device):
     """
     Build modular duality map assuming layers are in execution order.
@@ -616,6 +762,7 @@ class DualMerger(TaskVectorBasedMerger):
         
         print(ordered_keys)
         module_net = build_duality_map(ordered_keys, multi_task_vector_cpu, self.device)  # ← add self.device
+        module_foo  = build_duality_map_my(ordered_keys, multi_task_vector_cpu)
         module_vec_flat = module_net
 
         #compute_average_SAR(module_vec_flat, finetuned_models, datasets)
