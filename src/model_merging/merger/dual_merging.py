@@ -312,8 +312,19 @@ def build_duality_map(layer_names, grads):
             print(f"⚠ {name}: Ignored")
     print(f"Total Atomic Modules: {m.atoms} {m.mass}, To Consider: {len(to_consider_grad)}, {len(to_consider_name)}")
 
-    to_consider_dualized_grad = m.dualize(to_consider_grad)
-    print(f"Dualized: {len(to_consider_dualized_grad)}")
+    # Convert PyTorch tensors → JAX arrays before calling modula's dualize
+    to_consider_grad_jax = [
+        jnp.array(g.detach().cpu().numpy()) for g in to_consider_grad
+    ]
+
+    to_consider_dualized_grad_jax = m.dualize(to_consider_grad_jax)
+    print(f"Dualized: {len(to_consider_dualized_grad_jax)}")
+
+    # Convert JAX arrays → PyTorch tensors for the rest of the pipeline
+    to_consider_dualized_grad = [
+        torch.from_numpy(np.array(g)) for g in to_consider_dualized_grad_jax
+    ]
+
     # Return the dictionary of all dualized gradients
     return dict(zip(to_consider_name, to_consider_dualized_grad))
 
