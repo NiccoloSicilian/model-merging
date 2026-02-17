@@ -189,9 +189,8 @@ def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
     mlp = m1@ GeLU() @ m2
     
     # Residual paths
-    att_block = (1 - 1/(2*num_blocks)) * Identity() + 1/(2*num_blocks) * att
-    mlp_block = (1 - 1/(2*num_blocks)) * Identity() + 1/(2*num_blocks) * mlp
-    transformer = (mlp_block @ att_block) ** num_blocks
+    
+    transformer = (mlp @ att) ** num_blocks
 
     # 4. Final Head (ln_post and proj)
     proj = LinearSVD(d_embed, num_classes)
