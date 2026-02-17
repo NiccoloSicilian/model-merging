@@ -370,9 +370,13 @@ def build_duality_map(layer_names, grads):
     print(f"Dualized: {len(to_consider_dualized_grad_jax)}")
 
     # Convert JAX arrays → PyTorch tensors for the rest of the pipeline
-    to_consider_dualized_grad = [
-        torch.from_numpy(np.array(g)) for g in to_consider_dualized_grad_jax
-    ]
+    to_consider_dualized_grad = []
+    for g in to_consider_dualized_grad_jax:
+        jax.block_until_ready(g)                          # force JAX to finish
+        arr = np.asarray(g)                               # zero-copy if possible
+        to_consider_dualized_grad.append(
+            torch.from_numpy(arr.copy()).contiguous()     # .copy() detaches from JAX memory
+        )
 
     # Return the dictionary of all dualized gradients
     return dict(zip(to_consider_name, to_consider_dualized_grad))
@@ -538,14 +542,20 @@ class DualMerger(TaskVectorBasedMerger):
         
         print(ordered_keys)
         module_net = build_duality_map(ordered_keys, multi_task_vector_cpu)
-        # Get dualized vectors (already on CPU)
-        
         module_vec_flat = module_net
+
         compute_average_SAR(module_vec_flat, finetuned_models, datasets)
-        # Move back to GPU only what we need
+
+        # Update only the dualized keys, ensure all values end up on device and contiguous
         for key in module_vec_flat:
-            multi_task_vector_cpu[key] = module_vec_flat[key].to(self.device)
-        
+            multi_task_vector_cpu[key] = module_vec_flat[key].contiguous().to(self.device)
+
+        # Also move non-dualized keys (biases, ln_, etc.) to device
+        for key in multi_task_vector_cpu:
+            if not isinstance(multi_task_vector_cpu[key], torch.Tensor) or \
+               multi_task_vector_cpu[key].device != self.device:
+                multi_task_vector_cpu[key] = multi_task_vector_cpu[key].to(self.device)
+
         del module_vec_flat
         gc.collect()
             
@@ -565,6 +575,7 @@ class DualMerger(TaskVectorBasedMerger):
             merged_encoder,
             coefficient=coefficient,
         )
+
         
         return merged_encoder
 
