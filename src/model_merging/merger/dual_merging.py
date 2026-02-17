@@ -166,9 +166,10 @@ def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
     # Note: Checkpoint shows [768, 3, 16, 16] which is a Conv layer
     
     conv1 = Conv2DSVD(fanin=input_channels, fanout=d_embed,kernel_size=patch_size)
+    conv1.tare(1.0)
     # 2. Positional & Class Embedding
     visual_pos_embed = LinearSVD(197, d_embed)
-    
+    visual_pos_embed.tare(1.0)
     # Pre-transformer norm (ln_pre)
 
     # 3. Transformer Blocks
@@ -186,6 +187,7 @@ def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
 
     # 4. Final Head (ln_post and proj)
     proj = LinearSVD(d_embed, num_classes)
+    proj.tare(1.0)
     # Correct Flow: Input -> Patch -> Pos -> ln_pre -> Transformer -> ln_post -> Head
     return proj @ transformer  @ visual_pos_embed @ conv1
 ###
