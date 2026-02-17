@@ -19,6 +19,11 @@ from model_merging.merging.structured import (
 import re
 import torch
 import gc
+import jax
+import jax.numpy as jnp
+from modula.abstract import *
+from modula.atom import *
+from modula.bond import *
 
 pylogger = logging.getLogger(__name__)
 import torch
@@ -27,7 +32,36 @@ from pathlib import Path
 
 import torch
 from math import sqrt
+###NEW
+def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_size=16, input_channels=3):
+    mlp_width = 4 * d_embed
+    patch_dim = input_channels * (patch_size ** 2)
 
+    # 1. Patch Embed (conv1 in checkpoint)
+    # Note: Checkpoint shows [768, 3, 16, 16] which is a Conv layer
+    
+    conv1 = Linear(d_embed, patch_dim)
+
+    # 2. Positional & Class Embedding
+    visual_pos_embed = Linear(197, d_embed)
+    
+    # Pre-transformer norm (ln_pre)
+
+    # 3. Transformer Blocks
+    att = Linear(d_embed, d_embed) @ Linear(3 * d_embed, d_embed)
+    mlp = Linear(d_embed, mlp_width) @ GeLU() @ Linear(mlp_width, d_embed)
+    
+    # Residual paths
+    att_block = (1 - 1/(2*num_blocks)) * Identity() + 1/(2*num_blocks) * att
+    mlp_block = (1 - 1/(2*num_blocks)) * Identity() + 1/(2*num_blocks) * mlp
+    transformer = (mlp_block @ att_block) ** num_blocks
+
+    # 4. Final Head (ln_post and proj)
+    proj = Linear(d_embed, num_classes)
+
+    # Correct Flow: Input -> Patch -> Pos -> ln_pre -> Transformer -> ln_post -> Head
+    return proj @ transformer  @ visual_pos_embed @ conv1
+###
 def linear_mod(g, name):
     """Apply Linear layer duality map (RMS→RMS operator norm)"""
     g_cpu = g.cpu()
@@ -241,7 +275,8 @@ def build_duality_map(layer_names, grads):
     print("\n" + "="*80)
     print("STEP 1: Creating Atomic Modules with Dualized Gradients")
     print("="*80)
-    
+    m = ViT_B_16()
+    print(f"Total Atomic Modules: {m.atoms} {m.mass}")
     modules = []
     masses = linear_mass_scheduler_per_transfblock(layer_names)
     AttnBlock = {}
