@@ -32,6 +32,45 @@ from pathlib import Path
 import torch
 from math import sqrt
 ###NEW
+class Conv2d(Atom):
+    def __init__(self, fanout, fanin, kernel_size):
+        super().__init__()
+        self.fanin = fanin
+        self.fanout = fanout
+        self.kernel_size = kernel_size
+        self.smooth = True
+        self.mass = 1
+        self.sensitivity = 1
+
+    def forward(self, x, w):
+        print("foward no needed")
+        return None
+
+    def initialize(self, key):
+        print("init no needed")
+        return None
+
+    def project(self, w):
+        weight = w[0]
+        
+        # Orthogonalize each spatial slice
+        ortho_map = jax.vmap(jax.vmap(orthogonalize, in_axes=2, out_axes=2), in_axes=2, out_axes=2)
+        weight = ortho_map(weight)
+        
+        # Apply scaling
+        scale = (1.0 / (self.kernel_size ** 2)) * jnp.sqrt(self.fanout / self.fanin)
+        return [weight * scale]
+
+    def dualize(self, grad_w, target_norm=1.0):
+        grad = grad_w[0]
+        
+        # Orthogonalize each spatial slice of the gradient
+        ortho_map = jax.vmap(jax.vmap(orthogonalize, in_axes=2, out_axes=2), in_axes=2, out_axes=2)
+        d_weight = ortho_map(grad)
+        
+        # Apply scaling and target_norm
+        scale = (1.0 / (self.kernel_size ** 2)) * jnp.sqrt(self.fanout / self.fanin)
+        return [d_weight * scale * target_norm]
 def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_size=16, input_channels=3):
     mlp_width = 4 * d_embed
     patch_dim = input_channels * (patch_size ** 2)
@@ -39,7 +78,7 @@ def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
     # 1. Patch Embed (conv1 in checkpoint)
     # Note: Checkpoint shows [768, 3, 16, 16] which is a Conv layer
     
-    conv1 = Linear(d_embed, patch_dim)
+    conv1 = Conv2d(fanin=input_channels, fanout=d_embed,kernel_size=patch_size)
 
     # 2. Positional & Class Embedding
     visual_pos_embed = Linear(197, d_embed)
