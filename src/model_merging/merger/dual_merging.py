@@ -84,7 +84,33 @@ def get_vit_topological_order(keys):
     return sorted(keys, key=sort_key)
 
 
+import sys
 
+def save_module_vec_to_txt(module_dict,file_name, path="/leonardo/home/userexternal/nsicilia/DualMerging/"):
+    """
+    Saves a dictionary of layer names and PyTorch tensors to a text file,
+    ensuring that the full matrix values are written without truncation.
+    """
+    filepath = path+file_name
+    print(f"📝 Saving matrix values to {filepath}...")
+    
+    # Save original print options and set to max so arrays aren't truncated
+    orig_threshold = np.get_printoptions()['threshold']
+    np.set_printoptions(threshold=sys.maxsize)
+    
+    try:
+        with open(filepath, 'w') as f:
+            for layer_name, tensor in module_dict.items():
+                f.write(f"=== Layer: {layer_name} ===\n")
+                f.write(f"Shape: {list(tensor.shape)}\n")
+                # Detach from graph, move to CPU, and convert to string
+                matrix_str = str(tensor.detach().cpu().numpy())
+                f.write(matrix_str + "\n\n")
+    finally:
+        # Always restore the original print options to avoid lagging your console later
+        np.set_printoptions(threshold=orig_threshold)
+        
+    print(f"✅ Matrices successfully written to {filepath}")
 
 class DualMerger(TaskVectorBasedMerger):
 
@@ -145,6 +171,7 @@ class DualMerger(TaskVectorBasedMerger):
         
         module_net = build_duality_map(ordered_keys, multi_task_vector_cpu, self.device)  # ← add self.device
         module_vec_flat = module_net
+        save_module_vec_to_txt(module_net,"matrixesDual_"+self.model_name.replace("/", "-")+"task"+str(len(datasets))+".txt", path="/leonardo/home/userexternal/nsicilia/DualMerging")
         #compute_average_SAR(module_vec_flat, finetuned_models, datasets)
 
         # Update dualized keys (come back as GPU tensors from build_duality_map)
