@@ -77,7 +77,7 @@ class IsotropicMerger(TaskVectorBasedMerger):
             ref_state_dict=ref_state_dict,
             svd_dict=svd_dict,
         )
-        save_module_vec_fast(multi_task_vector, "Iso")
+        save_module_vec_fast(multi_task_vector, "matrixesISOC_"+self.model_name.replace("/", "-")+"task"+str(len(datasets))+".txt")
         model_name = self.model_name
         coefficient = 1.0 
 
