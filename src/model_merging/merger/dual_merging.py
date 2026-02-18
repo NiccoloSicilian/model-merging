@@ -83,52 +83,7 @@ def get_vit_topological_order(keys):
 
     return sorted(keys, key=sort_key)
 
-def print_first_singular_values(module_vec_flat, tol=1e-6):
-    """
-    For each layer in module_vec_flat (dict: layer_name -> weight tensor),
-    compute SVD and print the largest singular value.
-    Skip tensors with dimension > 2.
-    Also checks if all singular values are (approximately) equal.
-    
-    tol: numerical tolerance for equality check
-    """
-    for layer_name, weight in module_vec_flat.items():
 
-        # Ensure tensor
-        if not isinstance(weight, torch.Tensor):
-            continue
-
-        # Skip tensors with dimension > 2
-        if weight.ndim > 2:
-            print(f"{layer_name}: skipped (ndim={weight.ndim})")
-            continue
-
-        # Only process 2D matrices
-        if weight.ndim != 2:
-            print(f"{layer_name}: skipped (shape={weight.shape})")
-            continue
-
-        try:
-            W = weight
-            singular_values = torch.linalg.svdvals(W)
-
-            first_sv = singular_values[0].item()
-
-            # Check if all singular values are approximately equal
-            all_equal = torch.allclose(
-                singular_values,
-                singular_values[0].expand_as(singular_values),
-                atol=tol,
-                rtol=0
-            )
-
-            print(
-                f"{layer_name}: first singular value = {first_sv:.6f} | "
-                f"all singular values equal? {all_equal}"
-            )
-
-        except RuntimeError as e:
-            print(f"{layer_name}: SVD failed ({e})")
 
 
 class DualMerger(TaskVectorBasedMerger):
@@ -190,7 +145,6 @@ class DualMerger(TaskVectorBasedMerger):
         
         module_net = build_duality_map(ordered_keys, multi_task_vector_cpu, self.device)  # ← add self.device
         module_vec_flat = module_net
-        print_first_singular_values(module_vec_flat)
         #compute_average_SAR(module_vec_flat, finetuned_models, datasets)
 
         # Update dualized keys (come back as GPU tensors from build_duality_map)
