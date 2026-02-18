@@ -124,40 +124,7 @@ class Conv2DSVD(Atom):
         return result
 
 
-class EmbedSVD(Atom):
-    def __init__(self, d_embed, num_embed):
-        super().__init__()
-        self.num_embed = num_embed
-        self.d_embed = d_embed
-        self.smooth = True
-        self.mass = 0.5
-        self.sensitivity = 1
-
-    def forward(self, x, w):
-        return w[0][x]
-
-    def initialize(self, key=None):
-        weight = torch.randn(self.num_embed, self.d_embed)
-        weight = weight / weight.norm(dim=1, keepdim=True) * sqrt(self.d_embed)
-        return [weight]
-
-    def project(self, w):
-        weight = w[0]
-        weight = weight / weight.norm(dim=1, keepdim=True) * sqrt(self.d_embed)
-        return [weight]
-
-    def dualize(self, grad_w, target_norm=1.0):
-        grad = grad_w[0]
-        
-        # 1. Calculate the global scalar factor
-        scalar_factor = sqrt(self.d_embed) * target_norm
-        
-        # 2. Compute the dual weight
-        # Note: Embed uses row-wise normalization (Spherical projection), not matrix SVD
-        norms = grad.norm(dim=1, keepdim=True).clamp(min=1e-9)
-        d_weight = (grad / norms) * scalar_factor
-        
-        return [d_weight]
+c
 def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_size=16, input_channels=3):
     mlp_width = 4 * d_embed
     patch_dim = input_channels * (patch_size ** 2)
@@ -167,7 +134,7 @@ def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
     
     conv1 = Conv2DSVD(fanin=input_channels, fanout=d_embed,kernel_size=patch_size)
     # 2. Positional & Class Embedding
-    visual_pos_embed = EmbedSVD(197, d_embed)
+    visual_pos_embed = LinearSVD(197, d_embed)
     # Pre-transformer norm (ln_pre)
 
     # 3. Transformer Blocks
@@ -204,40 +171,17 @@ def build_duality_map(layer_names, grads, device):
     for name in layer_names:
         if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
             continue
-        if 'visual.conv1.weight' in name:
+        if 'visual.conv1.weight' in name or ('visual.proj' in name and 'out_proj' not in name) or 'visual.positional_embedding' in name or ('visual.transformer.resblocks' in name and 'weight' in name and ('attn.in_proj_weight' in name or 'attn.out_proj.weight' in name or 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight' in name)):
             to_consider_name.append(name)
             to_consider_grad.append(grads[name].to(device))
-        elif 'visual.proj' in name and 'out_proj' not in name:
-            to_consider_name.append(name)
-            to_consider_grad.append(grads[name].to(device))
-        elif 'visual.positional_embedding' in name:
-            to_consider_name.append(name)
-            to_consider_grad.append(grads[name].to(device))
-        elif 'visual.transformer.resblocks' in name and 'weight' in name:
-            if 'attn.in_proj_weight' in name:
-                to_consider_name.append(name)
-                to_consider_grad.append(grads[name].to(device))
-            elif 'attn.out_proj.weight' in name:
-                to_consider_name.append(name)
-                to_consider_grad.append(grads[name].to(device))
-            elif 'mlp.c_fc.weight' in name:
-                to_consider_name.append(name)
-                to_consider_grad.append(grads[name].to(device))
-            elif 'mlp.c_proj.weight' in name:
-                to_consider_name.append(name)
-                to_consider_grad.append(grads[name].to(device))
         else:
             print(f"⚠ {name}: Ignored")
             continue
-
-        # Print first 100 values of the gradient just appended
-
+    # Print first 100 values of the gradient just appended
     print(f"Total Atomic Modules: {m.atoms} {m.mass}, To Consider: {len(to_consider_grad)}, {len(to_consider_name)}")
-
     # Dualize directly in PyTorch — no JAX conversion needed
     to_consider_dualized_grad = m.dualize(to_consider_grad)
     print(f"Dualized: {len(to_consider_dualized_grad)}")
-
     # Return the dictionary of all dualized gradients
     return dict(zip(to_consider_name, to_consider_dualized_grad))
 
@@ -288,7 +232,53 @@ def get_vit_topological_order(keys):
         return (5, 0, 0) # Unknown keys last
 
     return sorted(keys, key=sort_key)
-import torch
+
+def print_first_singular_values(module_vec_flat, tol=1e-6):
+    """
+    For each layer in module_vec_flat (dict: layer_name -> weight tensor),
+    compute SVD and print the largest singular value.
+    Skip tensors with dimension > 2.
+    Also checks if all singular values are (approximately) equal.
+    
+    tol: numerical tolerance for equality check
+    """
+    for layer_name, weight in module_vec_flat.items():
+
+        # Ensure tensor
+        if not isinstance(weight, torch.Tensor):
+            continue
+
+        # Skip tensors with dimension > 2
+        if weight.ndim > 2:
+            print(f"{layer_name}: skipped (ndim={weight.ndim})")
+            continue
+
+        # Only process 2D matrices
+        if weight.ndim != 2:
+            print(f"{layer_name}: skipped (shape={weight.shape})")
+            continue
+
+        try:
+            W = weight
+            singular_values = torch.linalg.svdvals(W)
+
+            first_sv = singular_values[0].item()
+
+            # Check if all singular values are approximately equal
+            all_equal = torch.allclose(
+                singular_values,
+                singular_values[0].expand_as(singular_values),
+                atol=tol,
+                rtol=0
+            )
+
+            print(
+                f"{layer_name}: first singular value = {first_sv:.6f} | "
+                f"all singular values equal? {all_equal}"
+            )
+
+        except RuntimeError as e:
+            print(f"{layer_name}: SVD failed ({e})")
 
 
 class DualMerger(TaskVectorBasedMerger):
@@ -350,7 +340,7 @@ class DualMerger(TaskVectorBasedMerger):
         
         module_net = build_duality_map(ordered_keys, multi_task_vector_cpu, self.device)  # ← add self.device
         module_vec_flat = module_net
-
+        print_first_singular_values(module_vec_flat)
         #compute_average_SAR(module_vec_flat, finetuned_models, datasets)
 
         # Update dualized keys (come back as GPU tensors from build_duality_map)
