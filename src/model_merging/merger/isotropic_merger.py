@@ -6,6 +6,7 @@ from model_merging.utils.utils import (
     apply_dict_to_model,
     compute_task_dict,
     print_memory,
+    save_module_vec_fast,
 )
 from model_merging.merging.structured import (
     get_svd_dict,
@@ -13,7 +14,6 @@ from model_merging.merging.structured import (
 )
 
 import torch
-
 pylogger = logging.getLogger(__name__)
 import torch
 import copy
@@ -77,7 +77,7 @@ class IsotropicMerger(TaskVectorBasedMerger):
             ref_state_dict=ref_state_dict,
             svd_dict=svd_dict,
         )
-        get_sing_values(multi_task_vector)
+        save_module_vec_fast(multi_task_vector, "Iso")
         model_name = self.model_name
         coefficient = 1.0 
 
