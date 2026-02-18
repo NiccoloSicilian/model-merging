@@ -84,30 +84,6 @@ def get_vit_topological_order(keys):
     return sorted(keys, key=sort_key)
 
 
-import sys
-import os
-import torch
-
-def save_module_vec_fast(module_dict, file_name, path="/leonardo/home/userexternal/nsicilia/DualMerging"):
-    """
-    Saves a dictionary of PyTorch tensors natively as a .pt file.
-    This is hundreds of times faster than saving to a .txt file.
-    """
-    # Ensure the file ends with .pt instead of .txt
-    if file_name.endswith('.txt'):
-        file_name = file_name.replace('.txt', '.pt')
-        
-    filepath = os.path.join(path, file_name)
-    print(f"⚡ Saving matrices to {filepath}...")
-    
-    # Move all tensors to CPU to avoid saving GPU-bound data
-    cpu_dict = {k: v.detach().cpu() for k, v in module_dict.items()}
-    
-    # Save natively with PyTorch
-    torch.save(cpu_dict, filepath)
-    
-    print(f"✅ Matrices successfully saved in a flash!")
-
 class DualMerger(TaskVectorBasedMerger):
 
     def __init__(self, optimal_alphas, svd_path, svd_compress_factor, model_name, device=None):
