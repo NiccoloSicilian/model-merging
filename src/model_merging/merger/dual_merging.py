@@ -124,7 +124,6 @@ class Conv2DSVD(Atom):
         return result
 
 
-c
 def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_size=16, input_channels=3):
     mlp_width = 4 * d_embed
     patch_dim = input_channels * (patch_size ** 2)
