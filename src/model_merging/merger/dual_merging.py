@@ -85,32 +85,28 @@ def get_vit_topological_order(keys):
 
 
 import sys
+import os
+import torch
 
-def save_module_vec_to_txt(module_dict,file_name, path="/leonardo/home/userexternal/nsicilia/DualMerging/"):
+def save_module_vec_fast(module_dict, file_name, path="/leonardo/home/userexternal/nsicilia/DualMerging"):
     """
-    Saves a dictionary of layer names and PyTorch tensors to a text file,
-    ensuring that the full matrix values are written without truncation.
+    Saves a dictionary of PyTorch tensors natively as a .pt file.
+    This is hundreds of times faster than saving to a .txt file.
     """
-    filepath = path+file_name
-    print(f"📝 Saving matrix values to {filepath}...")
-    
-    # Save original print options and set to max so arrays aren't truncated
-    orig_threshold = np.get_printoptions()['threshold']
-    np.set_printoptions(threshold=sys.maxsize)
-    
-    try:
-        with open(filepath, 'w') as f:
-            for layer_name, tensor in module_dict.items():
-                f.write(f"=== Layer: {layer_name} ===\n")
-                f.write(f"Shape: {list(tensor.shape)}\n")
-                # Detach from graph, move to CPU, and convert to string
-                matrix_str = str(tensor.detach().cpu().numpy())
-                f.write(matrix_str + "\n\n")
-    finally:
-        # Always restore the original print options to avoid lagging your console later
-        np.set_printoptions(threshold=orig_threshold)
+    # Ensure the file ends with .pt instead of .txt
+    if file_name.endswith('.txt'):
+        file_name = file_name.replace('.txt', '.pt')
         
-    print(f"✅ Matrices successfully written to {filepath}")
+    filepath = os.path.join(path, file_name)
+    print(f"⚡ Saving matrices to {filepath}...")
+    
+    # Move all tensors to CPU to avoid saving GPU-bound data
+    cpu_dict = {k: v.detach().cpu() for k, v in module_dict.items()}
+    
+    # Save natively with PyTorch
+    torch.save(cpu_dict, filepath)
+    
+    print(f"✅ Matrices successfully saved in a flash!")
 
 class DualMerger(TaskVectorBasedMerger):
 
