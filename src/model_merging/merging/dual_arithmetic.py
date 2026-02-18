@@ -94,3 +94,64 @@ class Conv2DSVD(Atom):
             for j in range(k):
                 result[:, :, i, j] = svd_orthogonalize(weight[:, :, i, j])
         return result
+
+
+def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_size=16, input_channels=3):
+    mlp_width = 4 * d_embed
+    patch_dim = input_channels * (patch_size ** 2)
+
+    # 1. Patch Embed (conv1 in checkpoint)
+    # Note: Checkpoint shows [768, 3, 16, 16] which is a Conv layer
+    
+    conv1 = Conv2DSVD(fanin=input_channels, fanout=d_embed,kernel_size=patch_size)
+    # 2. Positional & Class Embedding
+    visual_pos_embed = LinearSVD(197, d_embed)
+    # Pre-transformer norm (ln_pre)
+
+    # 3. Transformer Blocks
+    a1 = LinearSVD(d_embed, d_embed) 
+    a2 = LinearSVD(3*d_embed, d_embed) 
+    att = a1@ a2
+
+    m1 = LinearSVD(d_embed, mlp_width)
+    m2 = LinearSVD(mlp_width, d_embed)
+    mlp = m1@ GeLU() @ m2
+    
+    # Residual paths
+    
+    transformer = (mlp @ att) ** num_blocks
+
+    # 4. Final Head (ln_post and proj)
+    proj = LinearSVD(d_embed, num_classes)
+    # Correct Flow: Input -> Patch -> Pos -> ln_pre -> Transformer -> ln_post -> Head
+    return proj @ transformer  @ visual_pos_embed @ conv1
+###
+
+def build_duality_map(layer_names, grads, device):
+    """
+    Build modular duality map assuming layers are in execution order.
+    Applies composition sequentially: layer_N ∘ ... ∘ layer_1 ∘ layer_0
+    """
+    print("\n" + "="*80)
+    print("STEP 1: Creating Atomic Modules with Dualized Gradients")
+    print("="*80)
+    m = ViT_B_16()
+
+    to_consider_name = []
+    to_consider_grad = []
+    for name in layer_names:
+        if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
+            continue
+        if 'visual.conv1.weight' in name or ('visual.proj' in name and 'out_proj' not in name) or 'visual.positional_embedding' in name or ('visual.transformer.resblocks' in name and 'weight' in name and ('attn.in_proj_weight' in name or 'attn.out_proj.weight' in name or 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight' in name)):
+            to_consider_name.append(name)
+            to_consider_grad.append(grads[name].to(device))
+        else:
+            print(f"⚠ {name}: Ignored")
+            continue
+    # Print first 100 values of the gradient just appended
+    print(f"Total Atomic Modules: {m.atoms} {m.mass}, To Consider: {len(to_consider_grad)}, {len(to_consider_name)}")
+    # Dualize directly in PyTorch — no JAX conversion needed
+    to_consider_dualized_grad = m.dualize(to_consider_grad)
+    print(f"Dualized: {len(to_consider_dualized_grad)}")
+    # Return the dictionary of all dualized gradients
+    return dict(zip(to_consider_name, to_consider_dualized_grad))
