@@ -6,7 +6,6 @@ from model_merging.utils.utils import (
     apply_dict_to_model,
     compute_task_dict,
     print_memory,
-    save_module_vec_fast,
 )
 from model_merging.merging.structured import (
     get_svd_dict,
@@ -26,6 +25,29 @@ def get_sing_values(merged_enc):
             print(layer, S[0].item())
 # Keep your existing imports...
 # from ... import TaskVectorBasedMerger, compute_task_dict, get_svd_dict, isotropic_sum, apply_dict_to_model
+import sys
+import os
+import torch
+
+def save_module_vec_fast(module_dict, file_name, path="/leonardo/home/userexternal/nsicilia/DualMerging"):
+    """
+    Saves a dictionary of PyTorch tensors natively as a .pt file.
+    This is hundreds of times faster than saving to a .txt file.
+    """
+    # Ensure the file ends with .pt instead of .txt
+    if file_name.endswith('.txt'):
+        file_name = file_name.replace('.txt', '.pt')
+        
+    filepath = os.path.join(path, file_name)
+    print(f"⚡ Saving matrices to {filepath}...")
+    
+    # Move all tensors to CPU to avoid saving GPU-bound data
+    cpu_dict = {k: v.detach().cpu() for k, v in module_dict.items()}
+    
+    # Save natively with PyTorch
+    torch.save(cpu_dict, filepath)
+    
+    print(f"✅ Matrices successfully saved in a flash!")
 class IsotropicMerger(TaskVectorBasedMerger):
 
     def __init__(self, optimal_alphas, svd_path, svd_compress_factor,model_name, device=None):
@@ -77,7 +99,7 @@ class IsotropicMerger(TaskVectorBasedMerger):
             ref_state_dict=ref_state_dict,
             svd_dict=svd_dict,
         )
-        save_module_vec_fast(multi_task_vector, "matrixesISOC_"+self.model_name.replace("/", "-")+"task"+str(len(datasets))+".txt")
+        save_module_vec_fast(multi_task_vector, "matrixesISOC_"+self.model_name.replace("/", "-")+"task"+str(len(datasets))+".txt",path="/leonardo/home/userexternal/nsicilia/DualMerging")
         model_name = self.model_name
         coefficient = 1.0 
 
