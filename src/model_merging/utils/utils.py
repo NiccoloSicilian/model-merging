@@ -16,7 +16,30 @@ from omegaconf import ListConfig
 from pytorch_lightning import Callback
 
 pylogger = logging.getLogger(__name__)
+import sys
+import os
+import torch
 
+def save_module_vec_fast(module_dict, file_name, path="/leonardo/home/userexternal/nsicilia/DualMerging"):
+    """
+    Saves a dictionary of PyTorch tensors natively as a .pt file.
+    This is hundreds of times faster than saving to a .txt file.
+    """
+    # Ensure the file ends with .pt instead of .txt
+    if file_name.endswith('.txt'):
+        file_name = file_name.replace('.txt', '.pt')
+        
+    filepath = os.path.join(path, file_name)
+    print(f"⚡ Saving matrices to {filepath}...")
+    
+    # Move all tensors to CPU to avoid saving GPU-bound data
+    cpu_dict = {k: v.detach().cpu() for k, v in module_dict.items()}
+    
+    # Save natively with PyTorch
+    torch.save(cpu_dict, filepath)
+    
+    print(f"✅ Matrices successfully saved in a flash!")
+    
 def print_first_singular_values(module_vec_flat, tol=1e-6):
     """
     For each layer in module_vec_flat (dict: layer_name -> weight tensor),
