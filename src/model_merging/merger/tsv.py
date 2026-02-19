@@ -52,9 +52,7 @@ class TaskSingularVectorsMerger(TaskVectorBasedMerger):
                 base_model.state_dict(), finetuned_models[dataset]
             )
             del finetuned_models[dataset]  # Delete one model at a time
-            if self.device.type == "cuda":
-                torch.cuda.empty_cache()
-                gc.collect()
+            torch.cuda.empty_cache()
         print_memory("after computing task dicts")
 
         
