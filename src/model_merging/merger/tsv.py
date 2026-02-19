@@ -56,9 +56,7 @@ class TaskSingularVectorsMerger(TaskVectorBasedMerger):
                 torch.cuda.empty_cache()
                 gc.collect()
         print_memory("after computing task dicts")
-        self.svd_path = None
-        for k in task_dicts:
-            task_dicts[k] = task_dicts[k].cpu()
+
         
         svd_dict = get_svd_dict(
             task_dicts, datasets, self.svd_path, self.svd_compress_factor
