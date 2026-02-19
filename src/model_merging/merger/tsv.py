@@ -7,6 +7,7 @@ from model_merging.utils.utils import (
     compute_task_dict,
     is_matrix,
     print_memory,
+    save_module_vec_fast(module_dict, file_name, path="/leonardo/home/userexternal/nsicilia/DualMerging"),
 )
 import torch
 import copy
@@ -62,9 +63,9 @@ class TaskSingularVectorsMerger(TaskVectorBasedMerger):
             decomposed_task_vectors=svd_dict,
             non_matrix_params_aggregation=self.non_matrix_params_aggregation,
         )
-
+        save_module_vec_fast(multi_task_vector, , path="/leonardo/home/userexternal/nsicilia/DualMerging")
         merged_encoder: ImageEncoder = copy.deepcopy(base_model)
-
+    
         merged_encoder = apply_dict_to_model(
             multi_task_vector,
             merged_encoder,
