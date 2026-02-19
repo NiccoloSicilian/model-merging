@@ -69,7 +69,7 @@ class TaskSingularVectorsMerger(TaskVectorBasedMerger):
         merged_encoder = apply_dict_to_model(
             multi_task_vector,
             merged_encoder,
-            coefficient=0.8
+            coefficient=0.9
         )
 
         return merged_encoder
