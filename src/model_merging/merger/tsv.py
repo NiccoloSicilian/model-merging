@@ -57,6 +57,9 @@ class TaskSingularVectorsMerger(TaskVectorBasedMerger):
                 gc.collect()
         print_memory("after computing task dicts")
         self.svd_path = None
+        for k in task_dicts:
+            task_dicts[k] = task_dicts[k].cpu()
+        
         svd_dict = get_svd_dict(
             task_dicts, datasets, self.svd_path, self.svd_compress_factor
         )
@@ -66,6 +69,7 @@ class TaskSingularVectorsMerger(TaskVectorBasedMerger):
             decomposed_task_vectors=svd_dict,
             non_matrix_params_aggregation=self.non_matrix_params_aggregation,
         )
+        
         #save_module_vec_fast(multi_task_vector,"matrixesTSV_"+"ViTB16"+"task"+str(len(datasets))+".txt", path="/kaggle/working")
         merged_encoder: ImageEncoder = copy.deepcopy(base_model)
     
