@@ -38,7 +38,9 @@ class TaskSingularVectorsMerger(TaskVectorBasedMerger):
         self.svd_path = svd_path
         self.svd_compress_factor = svd_compress_factor
         self.non_matrix_params_aggregation = non_matrix_params_aggregation
-
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"🚀 DualMerger initialized on device: {self.device}")
+    
     def merge(self, base_model, finetuned_models):
 
         task_dicts = {}
@@ -50,8 +52,9 @@ class TaskSingularVectorsMerger(TaskVectorBasedMerger):
                 base_model.state_dict(), finetuned_models[dataset]
             )
             del finetuned_models[dataset]  # Delete one model at a time
-            torch.cuda.empty_cache()
-
+            if self.device.type == "cuda":
+                torch.cuda.empty_cache()
+                gc.collect()
         print_memory("after computing task dicts")
         self.svd_path = None
         svd_dict = get_svd_dict(
