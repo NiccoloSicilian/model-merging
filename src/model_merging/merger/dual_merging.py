@@ -10,6 +10,7 @@ from model_merging.utils.utils import (
     apply_dict_to_model,
     compute_task_dict,
     print_memory,
+    save_module_vec_fast,
 )
 from model_merging.merging.structured import (
     get_svd_dict,
