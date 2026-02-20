@@ -68,11 +68,12 @@ class TaskSingularVectorsMerger(TaskVectorBasedMerger):
         
         #save_module_vec_fast(multi_task_vector,"matrixesTSV_"+"ViTB16"+"task"+str(len(datasets))+".txt", path="/kaggle/working")
         merged_encoder: ImageEncoder = copy.deepcopy(base_model)
-    
+        coefficent = 0.5
+        print("USING:",coefficient)
         merged_encoder = apply_dict_to_model(
             multi_task_vector,
             merged_encoder,
-            coefficient=0.4
+            coefficient=coefficent
         )
 
         return merged_encoder
