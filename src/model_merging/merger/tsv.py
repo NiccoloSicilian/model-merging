@@ -66,7 +66,7 @@ class TaskSingularVectorsMerger(TaskVectorBasedMerger):
             non_matrix_params_aggregation=self.non_matrix_params_aggregation,
         )
         
-        save_module_vec_fast(multi_task_vector,"matrixesTSV_"+"ViTB16"+"task"+str(len(datasets))+".txt", path="/kaggle/working")
+        save_module_vec_fast(multi_task_vector,"matrixesTSVnocompr_"+"ViTB16"+"task"+str(len(datasets))+".txt", path="/kaggle/working")
         merged_encoder: ImageEncoder = copy.deepcopy(base_model)
         coefficient = 0.9
         print("USING:",coefficient)
