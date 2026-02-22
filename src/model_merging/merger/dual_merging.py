@@ -16,6 +16,7 @@ from model_merging.merging.structured import (
     get_svd_dict,
     isotropic_sum,
     avg_layers,
+    aggregate_decomposed_task_vectors,
 )
 import re
 import torch
@@ -122,7 +123,9 @@ class DualMerger(TaskVectorBasedMerger):
         svd_dict = get_svd_dict(
             task_dicts, datasets, self.svd_path, self.svd_compress_factor
         )
-
+        aggregate_decomposed_task_vectors(
+        ref_state_dict, decomposed_task_vectors, device="cuda", non_matrix_params_aggregation="base_model"
+        ):
         ref_state_dict = {k: v.to(self.device) for k, v in base_model.state_dict().items()}
 
         multi_task_vector = avg_layers(
