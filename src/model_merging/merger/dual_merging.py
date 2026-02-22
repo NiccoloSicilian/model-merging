@@ -123,14 +123,10 @@ class DualMerger(TaskVectorBasedMerger):
         svd_dict = get_svd_dict(
             task_dicts, datasets, self.svd_path, self.svd_compress_factor
         )
-        aggregate_decomposed_task_vectors(
-        ref_state_dict, decomposed_task_vectors, device="cuda", non_matrix_params_aggregation="base_model"
-        ):
-        ref_state_dict = {k: v.to(self.device) for k, v in base_model.state_dict().items()}
-
-        multi_task_vector = avg_layers(
-            ref_state_dict=ref_state_dict,
-            svd_dict=svd_dict,
+        multi_task_vector=aggregate_decomposed_task_vectors(
+            ref_state_dict=copy.deepcopy(base_model.state_dict()),
+            decomposed_task_vectors=svd_dict,
+            non_matrix_params_aggregation=self.non_matrix_params_aggregation,
         )
         
         # Move to CPU before building network
