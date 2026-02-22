@@ -127,7 +127,7 @@ class DualMerger(TaskVectorBasedMerger):
         multi_task_vector=aggregate_decomposed_task_vectors(
             ref_state_dict=copy.deepcopy(base_model.state_dict()),
             decomposed_task_vectors=svd_dict,
-            non_matrix_params_aggregation="mean,
+            non_matrix_params_aggregation="mean",
         )
         
         # Move to CPU before building network
