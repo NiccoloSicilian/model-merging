@@ -3,6 +3,7 @@ import logging
 import math
 from math import sqrt
 import numpy as np
+
 import copy
 from model_merging.merger.merger import TaskVectorBasedMerger
 from model_merging.model.encoder import ImageEncoder
