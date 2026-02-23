@@ -120,7 +120,7 @@ def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
         a2 = LinearSVD(3*d_embed, d_embed) 
         a2.mass = linear_mass_schedule(b*4+3,tot_layers)
         
-        att = a1@ a2
+        att = a2@ a1
     
         m1 = LinearSVD(d_embed, mlp_width)
         m1.mass = linear_mass_schedule(b*4+4,tot_layers)
