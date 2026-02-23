@@ -95,7 +95,7 @@ class Conv2DSVD(Atom):
                 result[:, :, i, j] = svd_orthogonalize(weight[:, :, i, j])
         return result
 def linear_mass_schedule(current_l, tot_layer):
-    return 0.01 + current_l/tot_layer * 0.5    
+    return 0.1 + current_l/tot_layer * (0.5-0.1)    
 
 def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_size=16, input_channels=3, mass_schedule='uniform'):
     mlp_width = 4 * d_embed
