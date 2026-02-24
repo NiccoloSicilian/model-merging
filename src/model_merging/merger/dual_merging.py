@@ -3,7 +3,6 @@ import logging
 import math
 from math import sqrt
 import numpy as np
-
 import copy
 from model_merging.merger.merger import TaskVectorBasedMerger
 from model_merging.model.encoder import ImageEncoder
@@ -17,7 +16,6 @@ from model_merging.merging.structured import (
     get_svd_dict,
     isotropic_sum,
     avg_layers,
-    aggregate_decomposed_task_vectors,
 )
 import re
 import torch
@@ -124,10 +122,12 @@ class DualMerger(TaskVectorBasedMerger):
         svd_dict = get_svd_dict(
             task_dicts, datasets, self.svd_path, self.svd_compress_factor
         )
-        multi_task_vector=aggregate_decomposed_task_vectors(
-            ref_state_dict=copy.deepcopy(base_model.state_dict()),
-            decomposed_task_vectors=svd_dict,
-            non_matrix_params_aggregation="mean",
+
+        ref_state_dict = {k: v.to(self.device) for k, v in base_model.state_dict().items()}
+
+        multi_task_vector = avg_layers(
+            ref_state_dict=ref_state_dict,
+            svd_dict=svd_dict,
         )
         
         # Move to CPU before building network
@@ -177,4 +177,3 @@ class DualMerger(TaskVectorBasedMerger):
         )
         
         return merged_encoder
-
