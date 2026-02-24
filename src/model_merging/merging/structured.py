@@ -221,7 +221,7 @@ def aggregate_decomposed_task_vectors(
             (
                 u_u,
                 v_u,
-                torch.diag(sum_s)*(1/len(datasets)),
+                torch.diag(sum_s),
                 u_v,
                 v_v,
             )
