@@ -96,6 +96,8 @@ class Conv2DSVD(Atom):
         return result
 def linear_mass_schedule(current_l, tot_layer):
     return 0.1 + current_l/tot_layer * (0.5-0.1)    
+def uniform_mass_schedule(current_l, tot_layer):
+    return 0.5
 
 def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_size=16, input_channels=3, mass_schedule='uniform'):
     mlp_width = 4 * d_embed
@@ -105,28 +107,28 @@ def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
     # Note: Checkpoint shows [768, 3, 16, 16] which is a Conv layer
     
     conv1 = Conv2DSVD(fanin=input_channels, fanout=d_embed,kernel_size=patch_size)
-    conv1.mass = linear_mass_schedule(0,tot_layers)
+    conv1.mass = uniform_mass_schedule(0,tot_layers)
     # 2. Positional & Class Embedding
     visual_pos_embed = LinearSVD(197, d_embed)
-    visual_pos_embed.mass = linear_mass_schedule(1,tot_layers)
+    visual_pos_embed.mass = uniform_mass_schedule(1,tot_layers)
     
     transformer = None
     # Pre-transformer norm (ln_pre)
     for b in range(num_blocks):
         # 3. Transformer Blocks
         a1 = LinearSVD(d_embed, d_embed) 
-        a1.mass = linear_mass_schedule(b*4+2,tot_layers)
+        a1.mass = uniform_mass_schedule(b*4+2,tot_layers)
         
         a2 = LinearSVD(3*d_embed, d_embed) 
-        a2.mass = linear_mass_schedule(b*4+3,tot_layers)
+        a2.mass = uniform_mass_schedule(b*4+3,tot_layers)
         
         att = a2@ a1
     
         m1 = LinearSVD(d_embed, mlp_width)
-        m1.mass = linear_mass_schedule(b*4+4,tot_layers)
+        m1.mass = uniform_mass_schedule(b*4+4,tot_layers)
         
         m2 = LinearSVD(mlp_width, d_embed)
-        m2.mass = linear_mass_schedule(b*4+5,tot_layers)
+        m2.mass = uniform_mass_schedule(b*4+5,tot_layers)
         
         mlp = m2@ GeLU() @ m1
         
@@ -138,7 +140,7 @@ def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
 
     # 4. Final Head (ln_post and proj)
     proj = LinearSVD(d_embed, num_classes)
-    proj.mass = linear_mass_schedule(tot_layers,tot_layers)
+    proj.mass = uniform_mass_schedule(tot_layers,tot_layers)
     
     # Correct Flow: Input -> Patch -> Pos -> ln_pre -> Transformer -> ln_post -> Head
     return proj @ transformer  @ visual_pos_embed @ conv1
