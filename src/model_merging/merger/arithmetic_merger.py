@@ -13,38 +13,52 @@ from model_merging.utils.utils import (
 
 pylogger = logging.getLogger(__name__)
 
-
 class TaskArithmeticMerger(TaskVectorBasedMerger):
-
     def __init__(self, optimal_alpha, device="cuda"):
         super().__init__()
-
         self.optimal_alpha = optimal_alpha
 
     def merge(
-        self, base_model: ImageEncoder, finetuned_models: Dict[str, ImageEncoder]
+        self, base_model, finetuned_models: Dict[str, object]
     ) -> ImageEncoder:
-
-        comulative_dict = {}
-
-        base_model.cuda()
-
+        cumulative_dict = {}
         datasets = list(finetuned_models.keys())
-        pretrained_model = copy.deepcopy(base_model)
+
+        # Handle base_model as either a model or state_dict
+        if isinstance(base_model, dict):
+            base_state_dict = base_model
+            pretrained_model = None
+        else:
+            base_model.cuda()
+            base_state_dict = base_model.state_dict()
+            pretrained_model = copy.deepcopy(base_model)
 
         for dataset in datasets:
-            finetuned_models[dataset].cuda()
-            comulative_dict = sum_task_dict(
-                comulative_dict,
+            model = finetuned_models[dataset]
+
+            # Handle finetuned model as either a model or state_dict
+            if isinstance(model, dict):
+                finetuned_state_dict = model
+            else:
+                model.cuda()
+                finetuned_state_dict = model.state_dict()
+
+            cumulative_dict = sum_task_dict(
+                cumulative_dict,
                 compute_task_dict(
-                    base_model.state_dict(), finetuned_models[dataset].state_dict()
+                    base_state_dict, finetuned_state_dict
                 ),
             )
-            del finetuned_models[dataset]  # Delete one model at a time
+            del finetuned_models[dataset]
             torch.cuda.empty_cache()
-        save_module_vec_fast(comulative_dict,"matrixesTA_VITB16"+"task"+str(len(datasets))+".txt", path="/kaggle/working")
-        merged_encoder = apply_dict_to_model(
-            comulative_dict, pretrained_model, coefficient=self.optimal_alpha
+
+        save_module_vec_fast(
+            cumulative_dict,
+            "matrixesTA_VITB16" + "task" + str(len(datasets)) + ".txt",
+            path="/kaggle/working"
         )
 
+        merged_encoder = apply_dict_to_model(
+            cumulative_dict, pretrained_model, coefficient=self.optimal_alpha
+        )
         return merged_encoder
