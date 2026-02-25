@@ -8,6 +8,7 @@ from model_merging.utils.utils import (
     apply_dict_to_model,
     compute_task_dict,
     sum_task_dict,
+    save_module_vec_fast,
 )
 
 pylogger = logging.getLogger(__name__)
