@@ -1,1 +1,2 @@
-_target_: model_merging.merger.arithmetic_merger.
+_target_: model_merging.merger.arithmetic_merger.TaskArithmeticMerger
+
