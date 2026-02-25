@@ -41,7 +41,7 @@ class TaskArithmeticMerger(TaskVectorBasedMerger):
             )
             del finetuned_models[dataset]  # Delete one model at a time
             torch.cuda.empty_cache()
-
+        save_module_vec_fast(comulative_dict,"matrixesTA_VITB16"+"task"+str(len(datasets))+".txt", path="/kaggle/working")
         merged_encoder = apply_dict_to_model(
             comulative_dict, pretrained_model, coefficient=self.optimal_alpha
         )
