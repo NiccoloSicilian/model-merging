@@ -1,6 +1,6 @@
 import copy
 import logging
-from typing import Dict, List
+from typing import Dict
 import torch
 from model_merging.merger.merger import TaskVectorBasedMerger
 from model_merging.model.encoder import ImageEncoder
@@ -19,19 +19,14 @@ class TaskArithmeticMerger(TaskVectorBasedMerger):
         self.optimal_alpha = optimal_alpha
 
     def merge(
-        self, base_model, finetuned_models: Dict[str, object]
+        self, base_model: ImageEncoder, finetuned_models: Dict[str, object]
     ) -> ImageEncoder:
         cumulative_dict = {}
         datasets = list(finetuned_models.keys())
 
-        # Handle base_model as either a model or state_dict
-        if isinstance(base_model, dict):
-            base_state_dict = base_model
-            pretrained_model = None
-        else:
-            base_model.cuda()
-            base_state_dict = base_model.state_dict()
-            pretrained_model = copy.deepcopy(base_model)
+        base_model.cuda()
+        base_state_dict = base_model.state_dict()
+        pretrained_model = copy.deepcopy(base_model)
 
         for dataset in datasets:
             model = finetuned_models[dataset]
@@ -45,9 +40,7 @@ class TaskArithmeticMerger(TaskVectorBasedMerger):
 
             cumulative_dict = sum_task_dict(
                 cumulative_dict,
-                compute_task_dict(
-                    base_state_dict, finetuned_state_dict
-                ),
+                compute_task_dict(base_state_dict, finetuned_state_dict),
             )
             del finetuned_models[dataset]
             torch.cuda.empty_cache()
