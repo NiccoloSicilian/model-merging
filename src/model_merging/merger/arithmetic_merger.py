@@ -27,13 +27,13 @@ class TaskArithmeticMerger(TaskVectorBasedMerger):
         base_model.cuda()
         base_state_dict = base_model.state_dict()
         pretrained_model = copy.deepcopy(base_model)
-
+        
         for dataset in datasets:
             model = finetuned_models[dataset]
 
             # Handle finetuned model as either a model or state_dict
             if isinstance(model, dict):
-                finetuned_state_dict = model
+                finetuned_state_dict = {k: v.cuda() for k, v in model.items()}
             else:
                 model.cuda()
                 finetuned_state_dict = model.state_dict()
