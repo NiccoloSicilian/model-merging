@@ -44,13 +44,13 @@ class TaskArithmeticMerger(TaskVectorBasedMerger):
             )
             del finetuned_models[dataset]
             torch.cuda.empty_cache()
-
+        """
         save_module_vec_fast(
             cumulative_dict,
             "matrixesTA_VITB16" + "task" + str(len(datasets)) + ".txt",
             path="/kaggle/working"
         )
-
+        """
         merged_encoder = apply_dict_to_model(
             cumulative_dict, pretrained_model, coefficient=self.optimal_alpha
         )
