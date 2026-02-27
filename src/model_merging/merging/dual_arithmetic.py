@@ -140,7 +140,7 @@ def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
         m2 = LinearSVD(mlp_width, d_embed)
         m2.mass = uniform_mass_schedule(b*4+5,tot_layers)
         
-        mlp = m2@ GeLU() @ m1
+        mlp = m2 @ m1
         
         # Residual paths
         if transformer:
