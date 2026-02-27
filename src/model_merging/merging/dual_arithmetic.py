@@ -31,7 +31,12 @@ class LinearSVD(Atom):
 
     def dualize(self, grad_w, target_norm=1.0):
         grad = grad_w[0]
-        
+        expected_shape = (self.fanout, self.fanin)
+        if grad.shape != expected_shape:
+            raise ValueError(
+                f"Dimension mismatch in dualize: "
+                f"Expected {expected_shape}, but got {grad.shape}"
+            )
         # 1. Calculate the scalar factor
         scalar_factor = sqrt(self.fanout / self.fanin) * target_norm
         
@@ -72,7 +77,12 @@ class Conv2DSVD(Atom):
 
     def dualize(self, grad_w, target_norm=1.0):
         grad = grad_w[0]
-        
+        expected_shape = (self.fanout, self.fanin, self.kernel_size, self.kernel_size)
+        if grad.shape != expected_shape:
+            raise ValueError(
+                f"Dimension mismatch in dualize: "
+                f"Expected {expected_shape}, but got {grad.shape}"
+            )
         # 1. Calculate the scalar factor
         # The paper defines this specifically for Conv2D to normalize spatial dimensions
         scalar_factor = (1.0 / self.kernel_size ** 2) * sqrt(self.fanout / self.fanin) * target_norm
