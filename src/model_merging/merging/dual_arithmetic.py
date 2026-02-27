@@ -134,10 +134,10 @@ def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
         
         att = a2@ a1
     
-        m1 = LinearSVD(d_embed, mlp_width)
+        m1 = LinearSVD(mlp_width,d_embed)
         m1.mass = uniform_mass_schedule(b*4+4,tot_layers)
         
-        m2 = LinearSVD(mlp_width, d_embed)
+        m2 = LinearSVD( d_embed,mlp_width)
         m2.mass = uniform_mass_schedule(b*4+5,tot_layers)
         
         mlp = m2 @ m1
