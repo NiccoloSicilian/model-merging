@@ -126,10 +126,10 @@ def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
     # Pre-transformer norm (ln_pre)
     for b in range(num_blocks):
         # 3. Transformer Blocks
-        a1 = LinearSVD(d_embed, d_embed) 
+        a1 = LinearSVD(3*d_embed, d_embed) 
         a1.mass = uniform_mass_schedule(b*4+2,tot_layers)
         
-        a2 = LinearSVD(3*d_embed, d_embed) 
+        a2 = LinearSVD(d_embed, d_embed) 
         a2.mass = uniform_mass_schedule(b*4+3,tot_layers)
         
         att = a2@ a1
