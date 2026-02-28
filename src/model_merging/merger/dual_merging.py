@@ -88,13 +88,15 @@ def get_vit_topological_order(keys):
 
 class DualMerger(TaskVectorBasedMerger):
 
-    def __init__(self, optimal_alphas, svd_path, svd_compress_factor, model_name, device=None):
+    def __init__(self, optimal_alphas, svd_path, svd_compress_factor, model_name,aggregation_mode, mass_schedule,device=None):
         super().__init__()
         self.optimal_alphas = optimal_alphas
         self.svd_path = svd_path
         self.svd_compress_factor = svd_compress_factor
         self.model_name = model_name
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.aggregation_mode = aggregation_mode #"tsv" "avg"
+        self.mass_schedule = mass_schedule #"uniform" "linear
         print(f"🚀 DualMerger initialized on device: {self.device}")
     
     @torch.no_grad()
@@ -125,11 +127,17 @@ class DualMerger(TaskVectorBasedMerger):
         )
 
         ref_state_dict = {k: v.to(self.device) for k, v in base_model.state_dict().items()}
+        if self.aggregation_mode == "avg":
+            multi_task_vector = avg_layers(
+                ref_state_dict=ref_state_dict,
+                svd_dict=svd_dict,
+            )
+        elif self.aggregation_mode == "tsv":
 
-        multi_task_vector = avg_layers(
-            ref_state_dict=ref_state_dict,
-            svd_dict=svd_dict,
-        )
+        else:
+            print("Uknown aggregation mode")
+            return None
+                
         
         # Move to CPU before building network
         multi_task_vector_cpu = {k: v.cpu() for k, v in multi_task_vector.items()}
