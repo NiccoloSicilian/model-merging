@@ -17,6 +17,7 @@ from model_merging.merging.structured import (
     get_svd_dict,
     isotropic_sum,
     avg_layers,
+    aggregate_decomposed_task_vectors,
 )
 import re
 import torch
@@ -133,7 +134,11 @@ class DualMerger(TaskVectorBasedMerger):
                 svd_dict=svd_dict,
             )
         elif self.aggregation_mode == "tsv":
-
+            multi_task_vector = aggregate_decomposed_task_vectors(
+                ref_state_dict=copy.deepcopy(base_model.state_dict()),
+                decomposed_task_vectors=svd_dict,
+                non_matrix_params_aggregation="mean",
+            )
         else:
             print("Uknown aggregation mode")
             return None
