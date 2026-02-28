@@ -115,30 +115,37 @@ def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
     tot_layers= 4*num_blocks+3
     # 1. Patch Embed (conv1 in checkpoint)
     # Note: Checkpoint shows [768, 3, 16, 16] which is a Conv layer
-    
+    mass_sched = uniform_mass_schedule
+    if mass_schedule == "linear":
+        mass_sched = linear_mass_schedule
+    elif mass_schedule == "uniform":
+        mass_sched = uniform_mass_schedule
+    else:
+        print("Unkown mass schedule")
+        return None
     conv1 = Conv2DSVD(fanin=input_channels, fanout=d_embed,kernel_size=patch_size)
-    conv1.mass = uniform_mass_schedule(0,tot_layers)
+    conv1.mass = mass_sched(0,tot_layers)
     # 2. Positional & Class Embedding
     visual_pos_embed = LinearSVD(197, d_embed)
-    visual_pos_embed.mass = uniform_mass_schedule(1,tot_layers)
+    visual_pos_embed.mass = mass_sched(1,tot_layers)
     
     transformer = None
     # Pre-transformer norm (ln_pre)
     for b in range(num_blocks):
         # 3. Transformer Blocks
         a1 = LinearSVD(3*d_embed, d_embed) 
-        a1.mass = uniform_mass_schedule(b*4+2,tot_layers)
+        a1.mass = mass_sched(b*4+2,tot_layers)
         
         a2 = LinearSVD(d_embed, d_embed) 
-        a2.mass = uniform_mass_schedule(b*4+3,tot_layers)
+        a2.mass = mass_sched(b*4+3,tot_layers)
         
         att = a2@ a1
     
         m1 = LinearSVD(mlp_width,d_embed)
-        m1.mass = uniform_mass_schedule(b*4+4,tot_layers)
+        m1.mass = mass_sched(b*4+4,tot_layers)
         
         m2 = LinearSVD( d_embed,mlp_width)
-        m2.mass = uniform_mass_schedule(b*4+5,tot_layers)
+        m2.mass = mass_sched(b*4+5,tot_layers)
         
         mlp = m2 @ m1
         
@@ -150,13 +157,13 @@ def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
 
     # 4. Final Head (ln_post and proj)
     proj = LinearSVD(d_embed, num_classes)
-    proj.mass = uniform_mass_schedule(tot_layers,tot_layers)
+    proj.mass = mass_sched(tot_layers,tot_layers)
     
     # Correct Flow: Input -> Patch -> Pos -> ln_pre -> Transformer -> ln_post -> Head
     return proj @ transformer  @ visual_pos_embed @ conv1
 ###
 
-def build_duality_map(layer_names, grads, device):
+def build_duality_map(layer_names, grads, mass_schedule, device):
     """
     Build modular duality map assuming layers are in execution order.
     Applies composition sequentially: layer_N ∘ ... ∘ layer_1 ∘ layer_0
@@ -164,7 +171,7 @@ def build_duality_map(layer_names, grads, device):
     print("\n" + "="*80)
     print("STEP 1: Creating Atomic Modules with Dualized Gradients")
     print("="*80)
-    m = ViT_B_16()
+    m = ViT_B_16(mass_schedule=mass_schedule)
 
     to_consider_name = []
     to_consider_grad = []
