@@ -97,7 +97,7 @@ class DualMerger(TaskVectorBasedMerger):
         self.model_name = model_name
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.aggregation_mode = aggregation_mode #"tsv" "avg"
-        self.mass_schedule = mass_schedule #"uniform" "linear
+        self.mass_schedule = mass_schedule #"uniform" "linear"
         print(f"🚀 DualMerger initialized on device: {self.device}")
     
     @torch.no_grad()
@@ -156,7 +156,7 @@ class DualMerger(TaskVectorBasedMerger):
         
         print(ordered_keys)
         
-        module_net = build_duality_map(ordered_keys, multi_task_vector_cpu, self.device)  # ← add self.device
+        module_net = build_duality_map(ordered_keys, multi_task_vector_cpu, self.device, self.mass_schedule)  # ← add self.device
         module_vec_flat = module_net
         save_module_vec_fast(module_net,"matrixesDual_"+self.model_name.replace("/", "-")+"task"+str(len(datasets))+".txt", path="/kaggle/working")
         #compute_average_SAR(module_vec_flat, finetuned_models, datasets)
