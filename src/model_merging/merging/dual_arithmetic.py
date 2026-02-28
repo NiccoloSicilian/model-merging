@@ -105,7 +105,7 @@ class Conv2DSVD(Atom):
                 result[:, :, i, j] = svd_orthogonalize(weight[:, :, i, j])
         return result
 def linear_mass_schedule(current_l, tot_layer):
-    return 0.1 + current_l/tot_layer * (0.5-0.1)    
+    return 0.01 + current_l/tot_layer * (0.5-0.01)    
 def uniform_mass_schedule(current_l, tot_layer):
     return 0.5
 
