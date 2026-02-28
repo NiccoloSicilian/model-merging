@@ -163,7 +163,7 @@ def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
     return proj @ transformer  @ visual_pos_embed @ conv1
 ###
 
-def build_duality_map(layer_names, grads, mass_schedule, device):
+def build_duality_map(layer_names, grads,  device,mass_schedule):
     """
     Build modular duality map assuming layers are in execution order.
     Applies composition sequentially: layer_N ∘ ... ∘ layer_1 ∘ layer_0
