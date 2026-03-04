@@ -68,7 +68,7 @@ class TaskSingularVectorsMerger(TaskVectorBasedMerger):
         
         save_module_vec_fast(multi_task_vector,"matrixesTSV_"+"ViTB16"+"task"+str(len(datasets))+".txt", path="/leonardo/home/userexternal/nsicilia/DualMerging")
         merged_encoder: ImageEncoder = copy.deepcopy(base_model)
-        coefficient = 0.9
+        coefficient = 0.8
         print("USING:",coefficient)
         merged_encoder = apply_dict_to_model(
             multi_task_vector,
