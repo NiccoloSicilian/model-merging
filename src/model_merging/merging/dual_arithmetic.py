@@ -213,6 +213,59 @@ def ViT_B_32(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
     proj.mass = mass_sched(tot_layers, tot_layers)
 
     return proj @ transformer @ visual_pos_embed @ conv1
+def ViT_L_14(num_classes=768, num_blocks=24, d_embed=1024, num_heads=16, patch_size=14, input_channels=3, mass_schedule='uniform'):
+    mlp_width = 4 * d_embed
+    patch_dim = input_channels * (patch_size ** 2)
+    tot_layers = 4 * num_blocks + 3
+    
+    mass_sched = uniform_mass_schedule
+    if mass_schedule == "linear":
+        mass_sched = linear_mass_schedule
+    elif mass_schedule == "uniform":
+        mass_sched = uniform_mass_schedule
+    else:
+        print("Unknown mass schedule")
+        return None
+
+    # 1. Patch Embed — patch_size=14 for ViT-L/14
+    conv1 = Conv2DSVD(fanin=input_channels, fanout=d_embed, kernel_size=patch_size)
+    conv1.mass = mass_sched(0, tot_layers)
+
+    # 2. Positional & Class Embedding
+    # ViT-L/14 on 224x224: (224/14)^2 + 1 = 16^2 + 1 = 256 + 1 = 257 tokens
+    # Note: If you are using 336x336 images (like CLIP ViT-L/14@336px), 
+    # this would be (336/14)^2 + 1 = 577 tokens.
+    visual_pos_embed = LinearSVD(257, d_embed)
+    visual_pos_embed.mass = mass_sched(1, tot_layers)
+
+    transformer = None
+    for b in range(num_blocks):
+        a1 = LinearSVD(3 * d_embed, d_embed)
+        a1.mass = mass_sched(b * 4 + 2, tot_layers)
+
+        a2 = LinearSVD(d_embed, d_embed)
+        a2.mass = mass_sched(b * 4 + 3, tot_layers)
+
+        att = a2 @ a1
+
+        m1 = LinearSVD(mlp_width, d_embed)
+        m1.mass = mass_sched(b * 4 + 4, tot_layers)
+
+        m2 = LinearSVD(d_embed, mlp_width)
+        m2.mass = mass_sched(b * 4 + 5, tot_layers)
+
+        mlp = m2 @ m1
+
+        if transformer:
+            transformer = (mlp @ att) @ transformer
+        else:
+            transformer = (mlp @ att)
+
+    # 3. Final projection head
+    proj = LinearSVD(d_embed, num_classes)
+    proj.mass = mass_sched(tot_layers, tot_layers)
+
+    return proj @ transformer @ visual_pos_embed @ conv1
 def build_duality_map(layer_names, grads,  device,mass_schedule, model_name):
     """
     Build modular duality map assuming layers are in execution order.
@@ -226,6 +279,8 @@ def build_duality_map(layer_names, grads,  device,mass_schedule, model_name):
         m = ViT_B_16(mass_schedule=mass_schedule)
     elif "B-32" in model_name:
         m = ViT_B_32(mass_schedule=mass_schedule)
+    elif "L-14" in model_name:
+        m = ViT_L_14(mass_schedule=mass_schedule)
     else:
         print("NO matching duality map for", model_name)
     to_consider_name = []
