@@ -222,9 +222,9 @@ def build_duality_map(layer_names, grads,  device,mass_schedule, model_name):
     print("STEP 1: Creating Atomic Modules with Dualized Gradients")
     print("="*80)
     m = None
-    if "B_16" in model_name:
+    if "B-16" in model_name:
         m = ViT_B_16(mass_schedule=mass_schedule)
-    elif "B_32" in model_name:
+    elif "B-32" in model_name:
         m = ViT_B_32(mass_schedule=mass_schedule)
     else:
         print("NO matching duality map for", model_name)
