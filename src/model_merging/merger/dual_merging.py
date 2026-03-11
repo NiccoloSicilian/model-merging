@@ -156,7 +156,7 @@ class DualMerger(TaskVectorBasedMerger):
         
         print(ordered_keys)
         
-        module_net = build_duality_map(ordered_keys, multi_task_vector_cpu, self.device, self.mass_schedule)  # ← add self.device
+        module_net = build_duality_map(ordered_keys, multi_task_vector_cpu, self.device, self.mass_schedule, self.model_name)  # ← add self.device
         module_vec_flat = module_net
         #save_module_vec_fast(module_net,"matrixesDual_"+self.model_name.replace("/", "-")+"task"+str(len(datasets))+".txt", path="/kaggle/working")
         #compute_average_SAR(module_vec_flat, finetuned_models, datasets)
