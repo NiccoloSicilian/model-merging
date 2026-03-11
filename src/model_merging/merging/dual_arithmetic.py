@@ -213,7 +213,7 @@ def ViT_B_32(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
     proj.mass = mass_sched(tot_layers, tot_layers)
 
     return proj @ transformer @ visual_pos_embed @ conv1
-def build_duality_map(layer_names, grads,  device,mass_schedule):
+def build_duality_map(layer_names, grads,  device,mass_schedule, model_name):
     """
     Build modular duality map assuming layers are in execution order.
     Applies composition sequentially: layer_N ∘ ... ∘ layer_1 ∘ layer_0
@@ -221,8 +221,13 @@ def build_duality_map(layer_names, grads,  device,mass_schedule):
     print("\n" + "="*80)
     print("STEP 1: Creating Atomic Modules with Dualized Gradients")
     print("="*80)
-    m = ViT_B_16(mass_schedule=mass_schedule)
-
+    m = None
+    if "B_16" in model_name:
+        m = ViT_B_16(mass_schedule=mass_schedule)
+    elif "B_32" in model_name:
+        m = ViT_B_32(mass_schedule=mass_schedule)
+    else:
+        print("NO matching duality map for", model_name)
     to_consider_name = []
     to_consider_grad = []
     for name in layer_names:
