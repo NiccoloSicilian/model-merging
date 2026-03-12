@@ -84,7 +84,7 @@ def isotropic_sum(ref_state_dict, svd_dict, device="cuda"):
     datasets = list(svd_dict.keys())
 
     for layer_name in tqdm(layer_names, desc="Summing SVD"):
-        is_matrix = aggregated_model_dict[layer_name].dim() == 2 and "model.positional_embedding" not in layer_name
+        is_matrix = aggregated_model_dict[layer_name].dim() == 2 
 
         for i, dataset in enumerate(datasets):
 
@@ -118,7 +118,7 @@ def isotropic_sum(ref_state_dict, svd_dict, device="cuda"):
                         delta_layer - aggregated_model_dict[layer_name]
                     ) / (i + 1)
 
-        if "text_projection" in layer_name or not is_matrix:
+        if "text_projection" in layer_name or not is_matrix or "model.positional_embedding" in layer_name:
             continue
 
         u, s, v = torch.linalg.svd(sum, full_matrices=False)
