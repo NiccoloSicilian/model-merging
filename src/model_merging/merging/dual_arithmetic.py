@@ -123,8 +123,7 @@ def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
     else:
         print("Unkown mass schedule")
         return None
-    pos_emb = LinearSVD(fanin=d_embed, fnout=197)
-    pos_emb.mass = mass_sched(0,tot_layers)
+
     conv1 = Conv2DSVD(fanin=input_channels, fanout=d_embed,kernel_size=patch_size)
     conv1.mass = mass_sched(0,tot_layers)
     # 2. Positional & Class Embedding
@@ -293,9 +292,6 @@ def build_duality_map(layer_names, grads,  device,mass_schedule, model_name):
         if 'visual.conv1.weight' in name or ('visual.proj' in name and 'out_proj' not in name) or 'visual.positional_embedding' in name or ('visual.transformer.resblocks' in name and 'weight' in name and ('attn.in_proj_weight' in name or 'attn.out_proj.weight' in name or 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight' in name)):
             to_consider_name.append(name)
             to_consider_grad.append(grads[name].to(device))
-        elif 'positional_embedding' in name:
-            to_consider_name = [name] +to_consider_name
-            to_consider_grad = [grads[name].to(device)]+ to_consider_grad
         else:
             print(f"⚠ {name}: Ignored")
             continue
