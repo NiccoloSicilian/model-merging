@@ -45,12 +45,14 @@ def get_vit_topological_order(keys):
     conv1 -> pos_embed -> blocks (0..N) -> proj
     """
     def sort_key(k):
+        if 'positional_embedding' in k: 
+            return (-1, 0, 0)
         # 1. Conv1 (Input)
         if 'visual.conv1' in k: 
             return (0, 0, 0)
         
         # 2. Positional Embeddings
-        if 'positional_embedding' in k: 
+        if 'positional_embedding' in k and 'vision' in k: 
             return (1, 0, 0)
             
         # 3. Class Embedding (if present)
