@@ -294,8 +294,8 @@ def build_duality_map(layer_names, grads,  device,mass_schedule, model_name):
             to_consider_name.append(name)
             to_consider_grad.append(grads[name].to(device))
         elif 'positional_embedding' in name:
-            to_consider_name.append(name)
-            to_consider_grad.append(grads[name].to(device))
+            to_consider_name = [name] +to_consider_name
+            to_consider_grad = [grads[name].to(device)]+ to_consider_grad
         else:
             print(f"⚠ {name}: Ignored")
             continue
