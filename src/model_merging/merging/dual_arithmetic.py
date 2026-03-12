@@ -123,6 +123,8 @@ def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
     else:
         print("Unkown mass schedule")
         return None
+    pos_emb = LinearSVD(fanin=d_embed, fnout=197)
+    pos_emb.mass = mass_sched(0,tot_layers)
     conv1 = Conv2DSVD(fanin=input_channels, fanout=d_embed,kernel_size=patch_size)
     conv1.mass = mass_sched(0,tot_layers)
     # 2. Positional & Class Embedding
@@ -160,7 +162,7 @@ def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
     proj.mass = mass_sched(tot_layers,tot_layers)
     
     # Correct Flow: Input -> Patch -> Pos -> ln_pre -> Transformer -> ln_post -> Head
-    return proj @ transformer  @ visual_pos_embed @ conv1
+    return proj @ transformer  @ visual_pos_embed @ conv1 @ pos_emb
 ###
 def ViT_B_32(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_size=32, input_channels=3, mass_schedule='uniform'):
     mlp_width = 4 * d_embed
@@ -289,6 +291,9 @@ def build_duality_map(layer_names, grads,  device,mass_schedule, model_name):
         if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
             continue
         if 'visual.conv1.weight' in name or ('visual.proj' in name and 'out_proj' not in name) or 'visual.positional_embedding' in name or ('visual.transformer.resblocks' in name and 'weight' in name and ('attn.in_proj_weight' in name or 'attn.out_proj.weight' in name or 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight' in name)):
+            to_consider_name.append(name)
+            to_consider_grad.append(grads[name].to(device))
+        elif 'positional_embedding' in name:
             to_consider_name.append(name)
             to_consider_grad.append(grads[name].to(device))
         else:
