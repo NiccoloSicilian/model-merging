@@ -84,7 +84,7 @@ def isotropic_sum(ref_state_dict, svd_dict, device="cuda"):
     datasets = list(svd_dict.keys())
 
     for layer_name in tqdm(layer_names, desc="Summing SVD"):
-        is_matrix = aggregated_model_dict[layer_name].dim() == 2
+        is_matrix = aggregated_model_dict[layer_name].dim() == 2 and "model.positional_embedding" not in layer_name
 
         for i, dataset in enumerate(datasets):
 
