@@ -123,7 +123,6 @@ def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
     else:
         print("Unkown mass schedule")
         return None
-
     conv1 = Conv2DSVD(fanin=input_channels, fanout=d_embed,kernel_size=patch_size)
     conv1.mass = mass_sched(0,tot_layers)
     # 2. Positional & Class Embedding
