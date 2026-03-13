@@ -51,7 +51,7 @@ def get_vit_topological_order(keys):
             return (0, 0, 0)
         
         # 2. Positional Embeddings
-        if 'positional_embedding' in k and 'vision' in k: 
+        if 'positional_embedding' in k: 
             return (1, 0, 0)
             
         # 3. Class Embedding (if present)
@@ -125,6 +125,7 @@ class DualMerger(TaskVectorBasedMerger):
                 gc.collect()
 
         svd_dict = filter_task_vectors_noise(task_dicts)
+
 
         ref_state_dict = {k: v.to(self.device) for k, v in base_model.state_dict().items()}
         if self.aggregation_mode == "avg":
