@@ -335,6 +335,97 @@ def get_svd_dict(
     return svd_dict
 
 
+
+def is_matrix(layer):
+    """Helper function to check if a tensor is 2-dimensional."""
+    return layer.dim() == 2
+
+def compute_mp_threshold(layer):
+    """
+    Computes the Marchenko-Pastur noise threshold for a given layer
+    as defined in the Spectrum paper.
+    """
+    m, n = layer.shape
+    
+    # 1. Estimate standard deviation (sigma) using the Interquartile Range (IQR) 
+    # to account for potential skewness and kurtosis as specified in the paper.
+    # We divide by 1.34896 to convert IQR to the equivalent standard deviation.
+    layer_float = layer.float()
+    q75 = torch.quantile(layer_float, 0.75)
+    q25 = torch.quantile(layer_float, 0.25)
+    iqr = q75 - q25
+    sigma = iqr / 1.34896
+    
+    # 2. Calculate the upper bound of the noise spectrum (epsilon_+)
+    # The paper explicitly omits the (1/sqrt(n)) normalization term.
+    epsilon_plus = sigma * (1 + (m / n) ** 0.5)
+    
+    return epsilon_plus
+
+def compute_svd_and_compress_mp(layer):
+    """
+    Computes SVD and dynamically truncates singular values based on 
+    the Marchenko-Pastur threshold.
+    """
+    # Compute full SVD
+    u, s, v = torch.linalg.svd(layer.float(), full_matrices=False)
+    
+    # Calculate the noise threshold
+    epsilon_plus = compute_mp_threshold(layer)
+    
+    # Filter to keep only singular values strictly greater than the threshold
+    keep_indices = s > epsilon_plus
+    
+    # Failsafe: If all singular values fall below the threshold (entirely noise), 
+    # keep at least the top 1 component to avoid returning empty tensors and breaking the graph.
+    if not keep_indices.any():
+        keep_indices[0] = True
+        
+    k = keep_indices.sum().item()
+    
+    # Truncate U, S, V based on the dynamic rank 'k'
+    u_compressed = u[:, :k]
+    s_compressed = s[:k]
+    v_compressed = v[:k, :]
+    
+    return u_compressed, s_compressed, v_compressed
+
+def filter_task_vectors_noise(task_dicts):
+    """
+    Compress task vectors using Singular Value Decomposition (SVD) by filtering
+    noise using the Marchenko-Pastur distribution.
+    
+    Args:
+        task_dicts (dict): A dictionary where keys are dataset names and values are task dicts.
+
+    Returns:
+        dict: A dictionary with the same structure as `task_dicts`, but with each layer matrix
+              replaced by its dynamically compressed SVD components (u, s, v).
+    """
+    with torch.no_grad():
+        svd_dict = {}
+
+        for dataset, task_dict in tqdm(
+            task_dicts.items(), desc="Computing SVD (Marchenko-Pastur Filter)"
+        ):
+            svd_dict[dataset] = {}
+
+            for key, layer in task_dict.items():
+                
+                if is_matrix(layer):
+                    # Replace the static compress_rate with our dynamic MP filter
+                    u, s, v = compute_svd_and_compress_mp(layer)
+
+                    svd_dict[dataset][key] = {
+                        "u": u.detach().cpu(),
+                        "s": s.detach().cpu(),
+                        "v": v.detach().cpu(),
+                    }
+
+                else:
+                    svd_dict[dataset][key] = {"dim1": layer.detach().cpu()}
+
+        return svd_dict
 def measure_cosine_similarity(delta1: torch.Tensor, delta2: torch.Tensor) -> float:
     """
     Compute cosine similarity between two flattened matrices delta1, delta2.
