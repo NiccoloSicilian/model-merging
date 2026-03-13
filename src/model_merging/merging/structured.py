@@ -373,7 +373,7 @@ def compute_mp_threshold(layer, max_elements=1_000_000):
 def compute_svd_and_compress_mp(layer):
     """
     Computes SVD and dynamically truncates singular values based on 
-    the Marchenko-Pastur threshold.
+    the Marchenko-Pastur threshold, printing the retention stats.
     """
     # Compute full SVD
     u, s, v = torch.linalg.svd(layer.float(), full_matrices=False)
@@ -390,6 +390,11 @@ def compute_svd_and_compress_mp(layer):
         keep_indices[0] = True
         
     k = keep_indices.sum().item()
+    total_singular_values = s.shape[0]
+    
+    # Print the retention statistics
+    retention_percentage = (k / total_singular_values) * 100
+    print(f"Kept {k} out of {total_singular_values} singular values ({retention_percentage:.2f}% retained)")
     
     # Truncate U, S, V based on the dynamic rank 'k'
     u_compressed = u[:, :k]
