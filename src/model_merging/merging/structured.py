@@ -339,25 +339,33 @@ def get_svd_dict(
 def is_matrix(layer):
     """Helper function to check if a tensor is 2-dimensional."""
     return layer.dim() == 2
-
-def compute_mp_threshold(layer):
+    
+def compute_mp_threshold(layer, max_elements=1_000_000):
     """
     Computes the Marchenko-Pastur noise threshold for a given layer
-    as defined in the Spectrum paper.
+    as defined in the Spectrum paper, with subsampling for large tensors.
     """
     m, n = layer.shape
+    layer_float = layer.float()
     
+    # Check if the tensor is too large for PyTorch's quantile function
+    if layer.numel() > max_elements:
+        # Flatten and randomly sample elements to compute the quantiles safely
+        flat_layer = layer_float.view(-1)
+        # Generate random indices (with replacement for speed, it won't affect the stat)
+        indices = torch.randint(0, flat_layer.numel(), (max_elements,), device=layer.device)
+        sample_layer = flat_layer[indices]
+    else:
+        sample_layer = layer_float.view(-1)
+
     # 1. Estimate standard deviation (sigma) using the Interquartile Range (IQR) 
     # to account for potential skewness and kurtosis as specified in the paper.
-    # We divide by 1.34896 to convert IQR to the equivalent standard deviation.
-    layer_float = layer.float()
-    q75 = torch.quantile(layer_float, 0.75)
-    q25 = torch.quantile(layer_float, 0.25)
+    q75 = torch.quantile(sample_layer, 0.75)
+    q25 = torch.quantile(sample_layer, 0.25)
     iqr = q75 - q25
     sigma = iqr / 1.34896
     
     # 2. Calculate the upper bound of the noise spectrum (epsilon_+)
-    # The paper explicitly omits the (1/sqrt(n)) normalization term.
     epsilon_plus = sigma * (1 + (m / n) ** 0.5)
     
     return epsilon_plus
