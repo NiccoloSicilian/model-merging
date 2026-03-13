@@ -161,7 +161,7 @@ def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
     proj.mass = mass_sched(tot_layers,tot_layers)
     
     # Correct Flow: Input -> Patch -> Pos -> ln_pre -> Transformer -> ln_post -> Head
-    return proj @ transformer  @ visual_pos_embed @ conv1 @ pos_emb
+    return proj @ transformer  @ visual_pos_embed @ conv1
 ###
 def ViT_B_32(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_size=32, input_channels=3, mass_schedule='uniform'):
     mlp_width = 4 * d_embed
