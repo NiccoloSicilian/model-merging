@@ -18,6 +18,7 @@ from model_merging.merging.structured import (
     isotropic_sum,
     avg_layers,
     aggregate_decomposed_task_vectors,
+    filter_task_vectors_noise,
 )
 import re
 import torch
@@ -123,9 +124,7 @@ class DualMerger(TaskVectorBasedMerger):
                 torch.cuda.empty_cache()
                 gc.collect()
 
-        svd_dict = get_svd_dict(
-            task_dicts, datasets, self.svd_path, self.svd_compress_factor
-        )
+        svd_dict = filter_task_vectors_noise(task_dicts)
 
         ref_state_dict = {k: v.to(self.device) for k, v in base_model.state_dict().items()}
         if self.aggregation_mode == "avg":
