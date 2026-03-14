@@ -366,7 +366,8 @@ def compute_mp_threshold(layer, max_elements=1_000_000):
     sigma = iqr / 1.34896
     
     # 2. Calculate the upper bound of the noise spectrum (epsilon_+)
-    epsilon_plus = sigma * (1 + (m / n) ** 0.5)
+    aspect_ratio = max(m, n) / min(m, n)
+    epsilon_plus = sigma * (1 + (aspect_ratio) ** 0.5)
     
     return epsilon_plus
 
