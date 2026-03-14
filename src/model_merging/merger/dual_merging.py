@@ -123,7 +123,7 @@ class DualMerger(TaskVectorBasedMerger):
             if self.device.type == "cuda":
                 torch.cuda.empty_cache()
                 gc.collect()
-        if self.compress_factor < 1.0:
+        if self.svd_compress_factor < 1.0:
             svd_dict = filter_task_vectors_noise(task_dicts)
         else:
             svd_dict = get_svd_dict(
