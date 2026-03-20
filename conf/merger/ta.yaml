@@ -1,2 +1,3 @@
 _target_: model_merging.merger.arithmetic_merger.TaskArithmeticMerger
 optimal_alpha: 1.0
+svd_compress_factor: 1.0
