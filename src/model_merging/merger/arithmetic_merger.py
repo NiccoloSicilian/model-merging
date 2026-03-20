@@ -10,7 +10,12 @@ from model_merging.utils.utils import (
     sum_task_dict,
     save_module_vec_fast,
 )
-from model_merging.utils.svd_utils import get_svd_dict  # same import as IsotropicMerger
+
+from model_merging.merging.structured import (
+    get_svd_dict,
+    isotropic_sum,
+
+)
 
 pylogger = logging.getLogger(__name__)
 
