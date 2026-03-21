@@ -1,6 +1,3 @@
-
-
-
 import copy
 import logging
 from typing import Dict
@@ -13,21 +10,21 @@ from model_merging.utils.utils import (
     compute_task_dict,
     save_module_vec_fast,
 )
-
 from model_merging.merging.structured import (
     get_svd_dict,
     isotropic_sum,
-
 )
+
 pylogger = logging.getLogger(__name__)
 
 
 class TaskArithmeticMerger(TaskVectorBasedMerger):
-    def __init__(self, optimal_alpha, svd_path, svd_compress_factor, model_name, device=None):
+    def __init__(self, optimal_alpha, svd_path, svd_compress_factor, low_rank_factor, model_name, device=None):
         super().__init__()
         self.optimal_alpha = optimal_alpha
         self.svd_path = svd_path
         self.svd_compress_factor = svd_compress_factor
+        self.low_rank_factor = low_rank_factor  # fraction of singular values to keep, e.g. 0.5 keeps top 50%
         self.model_name = model_name
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"🚀 TaskArithmeticMerger initialized on device: {self.device}")
@@ -91,8 +88,24 @@ class TaskArithmeticMerger(TaskVectorBasedMerger):
                     else:
                         cumulative_dict[layer_name] += delta_layer
 
-        # 4. Apply summed task vector to base model
+        # 4. Low-rank decomposition of the aggregated task vector
+        low_rank_dict = {}
+        for layer_name in tqdm(cumulative_dict.keys(), desc="Low-rank compression"):
+            tensor = cumulative_dict[layer_name]
+
+            if tensor.dim() == 2 and "text_projection" not in layer_name:
+                u, s, vh = torch.linalg.svd(tensor, full_matrices=False)
+                k = max(1, int(len(s) * self.low_rank_factor))
+                u_k  = u[:, :k]
+                s_k  = s[:k]
+                vh_k = vh[:k, :]
+                low_rank_dict[layer_name] = u_k @ torch.diag(s_k) @ vh_k
+            else:
+                # 1D layers (biases etc.) are kept as-is
+                low_rank_dict[layer_name] = tensor
+
+        # 5. Apply low-rank aggregated task vector to base model
         merged_encoder = apply_dict_to_model(
-            cumulative_dict, pretrained_model, coefficient=self.optimal_alpha
+            low_rank_dict, pretrained_model, coefficient=self.optimal_alpha
         )
         return merged_encoder
