@@ -1,5 +1,10 @@
 import copy
 import logging
+import os
+import sys
+from pathlib import Path
+import torch
+from tqdm import tqdm
 from model_merging.merger.merger import TaskVectorBasedMerger
 from model_merging.model.encoder import ImageEncoder
 from model_merging.utils.utils import (
@@ -11,36 +16,27 @@ from model_merging.utils.utils import (
 from model_merging.merging.structured import (
     get_svd_dict,
     isotropic_sum,
-
 )
 
-import torch
 pylogger = logging.getLogger(__name__)
-import torch
-import copy
-from pathlib import Path
+
+
 def get_sing_values(merged_enc):
     for layer in merged_enc:
         tensor = merged_enc[layer]
         if tensor.dim() == 2:
             _, S, _ = torch.linalg.svd(tensor)
             print(layer, S[0].item())
-# Keep your existing imports...
-# from ... import TaskVectorBasedMerger, compute_task_dict, get_svd_dict, isotropic_sum, apply_dict_to_model
-import sys
-import os
-import torch
+
 
 class IsotropicMerger(TaskVectorBasedMerger):
-
-    def __init__(self, optimal_alphas, svd_path, svd_compress_factor,model_name, device=None):
+    def __init__(self, optimal_alphas, svd_path, svd_compress_factor, model_name, low_rank_factor=1.0, device=None):
         super().__init__()
         self.optimal_alphas = optimal_alphas
         self.svd_path = svd_path
         self.svd_compress_factor = svd_compress_factor
         self.model_name = model_name
-        # IGNORE the 'device' argument passed by Hydra.
-        # Auto-detect: Use GPU if available, else CPU.
+        self.low_rank_factor = low_rank_factor  # fraction of singular values to keep, e.g. 0.5 = top 50%
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"🚀 IsotropicMerger initialized on device: {self.device}")
 
@@ -48,60 +44,66 @@ class IsotropicMerger(TaskVectorBasedMerger):
     def merge(self, base_model, finetuned_models):
         # 1. Move base model to the auto-detected device
         base_model = base_model.to(self.device)
-
         task_dicts = {}
         datasets = list(finetuned_models.keys())
-        
-        # Calculate this BEFORE deleting items
-        num_tasks = len(datasets) 
+        num_tasks = len(datasets)
 
+        # 2. Compute task vectors
         for dataset in datasets:
-            # 2. Move the finetuned state_dict to device manually
-            # (finetuned_models[dataset] is an OrderedDict, not a Module)
             ft_state_dict = {
                 k: v.to(self.device) for k, v in finetuned_models[dataset].items()
             }
-
             task_dicts[dataset] = compute_task_dict(
                 base_model.state_dict(), ft_state_dict
             )
-            
-            # Cleanup to save VRAM
-            del finetuned_models[dataset] 
-            del ft_state_dict 
-            
+            del finetuned_models[dataset]
+            del ft_state_dict
             if self.device.type == "cuda":
                 torch.cuda.empty_cache()
+
+        # 3. SVD-compress all task vectors
         svd_dict = get_svd_dict(
             task_dicts, datasets, self.svd_path, self.svd_compress_factor
         )
-        # Ensure reference state dict is on the right device
-        ref_state_dict = {k: v.to(self.device) for k, v in base_model.state_dict().items()}
 
+        # 4. Isotropic sum
+        ref_state_dict = {k: v.to(self.device) for k, v in base_model.state_dict().items()}
         multi_task_vector = isotropic_sum(
             ref_state_dict=ref_state_dict,
             svd_dict=svd_dict,
         )
-        #save_module_vec_fast(multi_task_vector, "matrixesISOC_"+self.model_name.replace("/", "-")+"task"+str(len(datasets))+".txt",path="/kaggle/working")
-        model_name = self.model_name
-        coefficient = 1.0 
 
+        # 5. Low-rank compression of the aggregated task vector
+        if self.low_rank_factor < 1.0:
+            low_rank_vector = {}
+            for layer_name in tqdm(multi_task_vector.keys(), desc="Low-rank compression"):
+                tensor = multi_task_vector[layer_name]
+                if tensor.dim() == 2 and "text_projection" not in layer_name:
+                    u, s, vh = torch.linalg.svd(tensor, full_matrices=False)
+                    k = max(1, int(len(s) * self.low_rank_factor))
+                    low_rank_vector[layer_name] = u[:, :k] @ torch.diag(s[:k]) @ vh[:k, :]
+                else:
+                    low_rank_vector[layer_name] = tensor
+            multi_task_vector = low_rank_vector
+
+        # 6. Determine coefficient
+        model_name = self.model_name
+        coefficient = 1.0
         if (
             model_name in self.optimal_alphas
             and num_tasks in self.optimal_alphas[model_name]
         ):
             coefficient = self.optimal_alphas[model_name][num_tasks]
-        
-            
-        
-        merged_encoder = copy.deepcopy(base_model)
 
+        print(f"USING coefficient: {coefficient}, low_rank_factor: {self.low_rank_factor}")
+
+        # 7. Apply to base model
+        merged_encoder = copy.deepcopy(base_model)
         merged_encoder = apply_dict_to_model(
             multi_task_vector,
             merged_encoder,
             coefficient=coefficient,
         )
-
         return merged_encoder
 class IsotropicCommonTaskSpecificMerger(TaskVectorBasedMerger):
     def __init__(
