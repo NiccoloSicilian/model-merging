@@ -21,11 +21,11 @@ pylogger = logging.getLogger(__name__)
 
 
 class TaskSingularVectorsMerger(TaskVectorBasedMerger):
-    def __init__(self, svd_path, svd_compress_factor, non_matrix_params_aggregation, low_rank_factor=1.0):
+    def __init__(self, svd_path, svd_compress_factor, non_matrix_params_aggregation, optimal_alpha,low_rank_factor=1.0):
         super().__init__()
         self.svd_path = svd_path
         self.svd_compress_factor = svd_compress_factor
-        self.optimal_alpha = 
+        self.optimal_alpha = optimal_alpha
         self.non_matrix_params_aggregation = non_matrix_params_aggregation
         self.low_rank_factor = low_rank_factor  # fraction of singular values to keep, e.g. 0.5 = top 50%
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -72,7 +72,7 @@ class TaskSingularVectorsMerger(TaskVectorBasedMerger):
             multi_task_vector = low_rank_vector
 
         # 5. Apply to base model
-        coefficient = 0.8
+        coefficient = optimal_alpha
         print(f"USING coefficient: {coefficient}, low_rank_factor: {self.low_rank_factor}")
 
         merged_encoder: ImageEncoder = copy.deepcopy(base_model)
