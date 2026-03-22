@@ -4,3 +4,4 @@ svd_path: null
 svd_compress_factor: null 
 non_matrix_params_aggregation: "mean" # "base_model"
 optimal_alpha: 1.0
+low_rank_factor: 1.0
