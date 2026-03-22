@@ -72,7 +72,7 @@ class TaskSingularVectorsMerger(TaskVectorBasedMerger):
             multi_task_vector = low_rank_vector
 
         # 5. Apply to base model
-        coefficient = optimal_alpha
+        coefficient = self.optimal_alpha
         print(f"USING coefficient: {coefficient}, low_rank_factor: {self.low_rank_factor}")
 
         merged_encoder: ImageEncoder = copy.deepcopy(base_model)
