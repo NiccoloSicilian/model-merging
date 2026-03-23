@@ -108,7 +108,8 @@ class DualMerger(TaskVectorBasedMerger):
         task_dicts = {}
         datasets = list(finetuned_models.keys())
         num_tasks = len(datasets) 
-
+        raw_keys = list(base_model.state_dict().keys())
+        ordered_keys = get_vit_topological_order(raw_keys)
         for dataset in datasets:
             ft_state_dict = {
                 k: v.to(self.device) for k, v in finetuned_models[dataset].items()
@@ -117,18 +118,19 @@ class DualMerger(TaskVectorBasedMerger):
             task_dicts[dataset] = compute_task_dict(
                 base_model.state_dict(), ft_state_dict
             )
-            
+            module_net = build_duality_map(ordered_keys, task_dicts[dataset], self.device, self.mass_schedule, self.model_name)
+            for key in task_dicts[dataset]:
+                task_dicts[dataset][key] = module_net[key]
+                
             del ft_state_dict 
             
             if self.device.type == "cuda":
                 torch.cuda.empty_cache()
                 gc.collect()
-        if self.svd_compress_factor < 1.0:
-            svd_dict = filter_task_vectors_noise(task_dicts)
-        else:
-            svd_dict = get_svd_dict(
-                task_dicts, datasets, self.svd_path, self.svd_compress_factor
-            )
+        
+        svd_dict = get_svd_dict(
+            task_dicts, datasets, self.svd_path, self.svd_compress_factor
+        )
 
 
         ref_state_dict = {k: v.to(self.device) for k, v in base_model.state_dict().items()}
@@ -155,26 +157,17 @@ class DualMerger(TaskVectorBasedMerger):
             torch.cuda.empty_cache()
             gc.collect()
             
-        raw_keys = list(multi_task_vector_cpu.keys())
-        ordered_keys = get_vit_topological_order(raw_keys)
         
-        print(ordered_keys)
         
-        module_net = build_duality_map(ordered_keys, multi_task_vector_cpu, self.device, self.mass_schedule, self.model_name)  # ← add self.device
-        module_vec_flat = module_net
+        
         #save_module_vec_fast(module_net,"matrixesDual_"+self.model_name.replace("/", "-")+"task"+str(len(datasets))+".txt", path="/kaggle/working")
         #compute_average_SAR(module_vec_flat, finetuned_models, datasets)
-
-        # Update dualized keys (come back as GPU tensors from build_duality_map)
-        for key in module_vec_flat:
-            multi_task_vector_cpu[key] = module_vec_flat[key]
 
         # Move everything to device in one clean pass (.to() ensures contiguous)
         multi_task_vector_cpu = {
             k: v.to(self.device) for k, v in multi_task_vector_cpu.items()
         }
 
-        del module_vec_flat
         gc.collect()
             
         model_name = self.model_name
