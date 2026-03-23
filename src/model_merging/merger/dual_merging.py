@@ -119,7 +119,7 @@ class DualMerger(TaskVectorBasedMerger):
                 base_model.state_dict(), ft_state_dict
             )
             module_net = build_duality_map(ordered_keys, task_dicts[dataset], self.device, self.mass_schedule, self.model_name)
-            for key in task_dicts[dataset]:
+            for key in module_net:
                 task_dicts[dataset][key] = module_net[key]
                 
             del ft_state_dict 
