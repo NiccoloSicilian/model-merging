@@ -38,17 +38,20 @@ def run(cfg: DictConfig):
         model_name=cfg.nn.encoder.model_name
     )
     
-    # IMPORTANT: Ensure the encoder is NOT frozen so it can learn from scratch
+    # IMPORTANT: Unfreeze the encoder to train from scratch
     for param in zeroshot_encoder.parameters():
         param.requires_grad = True
 
-    # 1. Create dictionaries for heads and dataloaders
     classification_heads = nn.ModuleDict()
     train_dataloaders = {}
     test_dataloaders = {}
 
-    for task_name in cfg.dataset.tasks:
-        # Instantiate the head for the specific task
+    # Iterate over the LIST of datasets provided by the N14/N8 benchmark
+    for task_config in cfg.benchmark.datasets:
+        # We assume each dataset config has a 'name' attribute (e.g., 'SVHN', 'MNIST')
+        task_name = task_config.name 
+        
+        # 1. Instantiate the specific classification head
         head = get_classification_head(
             cfg.nn.encoder.model_name,
             task_name,
@@ -57,30 +60,28 @@ def run(cfg: DictConfig):
             device=cfg.device,
         )
         
-        # IMPORTANT: Ensure the head is NOT frozen
+        # IMPORTANT: Unfreeze the head
         for param in head.parameters():
             param.requires_grad = True
             
         classification_heads[task_name] = head
 
-        # Instantiate the dataset for the specific task
+        # 2. Instantiate the dataset
         task_dataset = instantiate(
-            cfg.dataset.configs[task_name], 
+            task_config, 
             preprocess_fn=zeroshot_encoder.val_preprocess,
             batch_size=cfg.train.batch_size,
         )
         train_dataloaders[task_name] = task_dataset.train_loader
         test_dataloaders[task_name] = task_dataset.test_loader
 
-    # 2. Instantiate the MultiTask model
+    # 3. Instantiate our custom MultiTask model
     model: MultiTaskImageClassifier = hydra.utils.instantiate(
         cfg.nn.module,
         encoder=zeroshot_encoder,
         classifiers=classification_heads, 
         _recursive_=False,
     )
-
-    # REMOVED: model.freeze_heads() - We want the entire model to learn!
 
     pylogger.info("Instantiating the <Trainer>")
     trainer = pl.Trainer(
@@ -91,7 +92,6 @@ def run(cfg: DictConfig):
     )
 
     pylogger.info("Starting training!")
-    # PyTorch Lightning accepts dictionaries of dataloaders natively
     trainer.fit(
         model=model,
         train_dataloaders=train_dataloaders,
@@ -100,7 +100,6 @@ def run(cfg: DictConfig):
     pylogger.info("Starting testing!")
     trainer.test(model=model, dataloaders=test_dataloaders)
 
-    # 3. Save the encoder (now fully trained across multiple tasks)
     upload_model_to_hf(model.encoder, cfg.nn.encoder.model_name, "multitask_trained_from_scratch")
 
     logger.log_configuration(model, cfg)
@@ -112,6 +111,6 @@ def run(cfg: DictConfig):
 def main(cfg: omegaconf.DictConfig):
     run(cfg)
 
-
 if __name__ == "__main__":
     main()
+    
