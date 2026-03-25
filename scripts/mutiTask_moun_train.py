@@ -51,7 +51,6 @@ def run(cfg: DictConfig):
         # We assume each dataset config has a 'name' attribute (e.g., 'SVHN', 'MNIST')
         task_name = task_config.name 
         
-        # 1. Instantiate the specific classification head
         head = get_classification_head(
             cfg.nn.encoder.model_name,
             task_name,
@@ -60,9 +59,14 @@ def run(cfg: DictConfig):
             device=cfg.device,
         )
         
-        # IMPORTANT: Unfreeze the head
+        # IMPORTANT: Unfreeze the head AND scramble it with random weights
         for param in head.parameters():
             param.requires_grad = True
+            
+        # This overwrites any pre-trained or zero-shot weights with random noise
+        nn.init.normal_(head.weight, std=0.02)
+        if head.bias is not None:
+            nn.init.zeros_(head.bias)
             
         classification_heads[task_name] = head
 
@@ -107,7 +111,7 @@ def run(cfg: DictConfig):
     if logger is not None:
         logger.experiment.finish()
         
-@hydra.main(config_path=str(PROJECT_ROOT / "conf"), config_name="finetune.yaml")
+@hydra.main(config_path=str(PROJECT_ROOT / "conf"), config_name="multitask_muon_train.yaml")
 def main(cfg: omegaconf.DictConfig):
     run(cfg)
 
