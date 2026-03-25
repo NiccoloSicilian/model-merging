@@ -16,7 +16,6 @@ from nn_core.model_logging import NNLogger
 
 from model_merging.model.encoder import ImageEncoder
 from model_merging.model.heads import get_classification_head
-# Immagina di aver rinominato/creato un nuovo modulo MultiTask
 from model_merging.model.image_classifier import MultiTaskImageClassifier 
 from model_merging.utils.io_utils import load_model_from_hf, upload_model_to_hf
 from hydra.utils import instantiate
@@ -38,25 +37,33 @@ def run(cfg: DictConfig):
     zeroshot_encoder: ImageEncoder = load_model_from_hf(
         model_name=cfg.nn.encoder.model_name
     )
+    
+    # IMPORTANT: Ensure the encoder is NOT frozen so it can learn from scratch
+    for param in zeroshot_encoder.parameters():
+        param.requires_grad = True
 
-    # 1. Crea un dizionario per le teste di classificazione e per i dataset
+    # 1. Create dictionaries for heads and dataloaders
     classification_heads = nn.ModuleDict()
     train_dataloaders = {}
     test_dataloaders = {}
 
-    # Assumiamo che cfg.dataset.tasks sia una lista, es: ["cifar10", "cars"]
     for task_name in cfg.dataset.tasks:
-        # Istanzia la head per la task specifica
-        classification_heads[task_name] = get_classification_head(
+        # Instantiate the head for the specific task
+        head = get_classification_head(
             cfg.nn.encoder.model_name,
             task_name,
             ckpt_path=cfg.misc.ckpt_path,
             openclip_cachedir=cfg.misc.openclip_cachedir,
             device=cfg.device,
         )
+        
+        # IMPORTANT: Ensure the head is NOT frozen
+        for param in head.parameters():
+            param.requires_grad = True
+            
+        classification_heads[task_name] = head
 
-        # Istanzia il dataset per la task specifica
-        # Nota: in Hydra dovrai strutturare cfg.dataset in modo che possa gestire config multiple
+        # Instantiate the dataset for the specific task
         task_dataset = instantiate(
             cfg.dataset.configs[task_name], 
             preprocess_fn=zeroshot_encoder.val_preprocess,
@@ -65,16 +72,15 @@ def run(cfg: DictConfig):
         train_dataloaders[task_name] = task_dataset.train_loader
         test_dataloaders[task_name] = task_dataset.test_loader
 
-    # 2. Istanzia il modello MultiTask
+    # 2. Instantiate the MultiTask model
     model: MultiTaskImageClassifier = hydra.utils.instantiate(
         cfg.nn.module,
         encoder=zeroshot_encoder,
-        classifiers=classification_heads, # Passiamo il dizionario di heads
+        classifiers=classification_heads, 
         _recursive_=False,
     )
 
-    # model.task_name = cfg.dataset.name <-- Questo potrebbe non servire più, o diventare una lista
-    model.freeze_heads() # Aggiorna questo metodo per freezare tutte le head nel ModuleDict
+    # REMOVED: model.freeze_heads() - We want the entire model to learn!
 
     pylogger.info("Instantiating the <Trainer>")
     trainer = pl.Trainer(
@@ -85,7 +91,7 @@ def run(cfg: DictConfig):
     )
 
     pylogger.info("Starting training!")
-    # PyTorch Lightning accetta dizionari di dataloader nativamente
+    # PyTorch Lightning accepts dictionaries of dataloaders natively
     trainer.fit(
         model=model,
         train_dataloaders=train_dataloaders,
@@ -94,8 +100,8 @@ def run(cfg: DictConfig):
     pylogger.info("Starting testing!")
     trainer.test(model=model, dataloaders=test_dataloaders)
 
-    # 3. Salva l'encoder (che ora è stato fine-tunato su più task)
-    upload_model_to_hf(model.encoder, cfg.nn.encoder.model_name, "multitask_finetuned")
+    # 3. Save the encoder (now fully trained across multiple tasks)
+    upload_model_to_hf(model.encoder, cfg.nn.encoder.model_name, "multitask_trained_from_scratch")
 
     logger.log_configuration(model, cfg)
 
