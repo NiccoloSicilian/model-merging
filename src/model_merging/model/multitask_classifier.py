@@ -34,7 +34,7 @@ class MultiTaskImageClassifier(pl.LightningModule):
         
         # 1. Store classifiers in a ModuleDict so PyTorch registers their parameters correctly
         self.classifiers = nn.ModuleDict(classifiers)
-
+        self.task_names = list(self.classifiers.keys())
         # 2. Setup separate metrics for each task
         self.metrics = nn.ModuleDict()
         for task_name, classifier in self.classifiers.items():
@@ -99,14 +99,22 @@ class MultiTaskImageClassifier(pl.LightningModule):
         return {"logits": all_logits, "loss": total_loss}
 
     def training_step(self, batch: Any, batch_idx: int) -> Mapping[str, Any]:
-        return self._step(batch=batch, split="train")
+        # During training, 'batch' is a dictionary of tasks. We can pass it directly.
+        return self._step(batch_dict=batch, split="train")
 
-    def validation_step(self, batch: Any, batch_idx: int) -> Mapping[str, Any]:
-        return self._step(batch=batch, split="val")
+    def validation_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Mapping[str, Any]:
+        # During val, 'batch' is a single batch. We use dataloader_idx to find the name, 
+        # and wrap it in a dict so _step knows how to read it.
+        task_name = self.task_names[dataloader_idx]
+        wrapped_batch = {task_name: batch}
+        return self._step(batch_dict=wrapped_batch, split="val")
 
-    def test_step(self, batch: Any, batch_idx: int) -> Mapping[str, Any]:
-        return self._step(batch=batch, split="test")
-
+    def test_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Mapping[str, Any]:
+        # Same as validation!
+        task_name = self.task_names[dataloader_idx]
+        wrapped_batch = {task_name: batch}
+        return self._step(batch_dict=wrapped_batch, split="test")
+        
     def freeze_heads(self):
         """ Freezes all task heads. """
         for head in self.classifiers.values():
