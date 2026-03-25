@@ -101,5 +101,11 @@ def run(cfg: DictConfig):
 
     if logger is not None:
         logger.experiment.finish()
+        
+@hydra.main(config_path=str(PROJECT_ROOT / "conf"), config_name="finetune.yaml")
+def main(cfg: omegaconf.DictConfig):
+    run(cfg)
 
-# ... resto del file (main e if __name__ == "__main__")
+
+if __name__ == "__main__":
+    main()
