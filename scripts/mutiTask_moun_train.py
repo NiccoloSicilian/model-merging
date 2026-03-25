@@ -22,7 +22,17 @@ from hydra.utils import instantiate
 
 pylogger = logging.getLogger(__name__)
 torch.set_float32_matmul_precision("high")
-
+def scramble_weights(m):
+    """Recursively initializes weights to random noise."""
+    if isinstance(m, (nn.Linear, nn.Conv2d)):
+        nn.init.normal_(m.weight, std=0.02)
+        if m.bias is not None:
+            nn.init.zeros_(m.bias)
+    elif isinstance(m, (nn.LayerNorm, nn.BatchNorm2d)):
+        nn.init.ones_(m.weight)
+        nn.init.zeros_(m.bias)
+    elif isinstance(m, nn.Embedding):
+        nn.init.normal_(m.weight, std=0.02)
 def run(cfg: DictConfig):
     seed_index_everything(cfg)
 
@@ -38,9 +48,14 @@ def run(cfg: DictConfig):
         model_name=cfg.nn.encoder.model_name
     )
     
-    # IMPORTANT: Unfreeze the encoder to train from scratch
+    # IMPORTANT: Unfreeze the encoder
     for param in zeroshot_encoder.parameters():
         param.requires_grad = True
+
+    # ---- NEW: SCRAMBLE THE ENCODER TO START FROM ZERO ----
+    pylogger.info("Scrambling encoder weights to start from pure scratch!")
+    zeroshot_encoder.apply(scramble_weights)
+    # ------------------------------------------------------
 
     classification_heads = nn.ModuleDict()
     train_dataloaders = {}
