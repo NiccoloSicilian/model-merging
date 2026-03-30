@@ -1,1 +1,4 @@
-
+defaults:
+  - _self_
+  - module: multitask
+  - encoder: b32
