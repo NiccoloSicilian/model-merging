@@ -9,7 +9,7 @@ core:
 
 defaults:
   - hydra: default
-  - nn: default
+  - nn: multitask_train
   - train: finetune
   - benchmark: N14  # <-- THIS IS THE MAGIC LINE! It replaces "- dataset: MNIST"
   - override hydra/launcher: basic
