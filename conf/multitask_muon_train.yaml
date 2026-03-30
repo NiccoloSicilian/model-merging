@@ -14,7 +14,9 @@ defaults:
   - benchmark: N14  # <-- THIS IS THE MAGIC LINE! It replaces "- dataset: MNIST"
   - override hydra/launcher: basic
   - _self_ # as last argument to allow the override of parameters via this main config
-
+# Add this to the bottom of your main config file
+dataset:
+  ft_epochs: 10  # Set this to your desired number of epochs
 seed_index: 0
 device: cuda
 
