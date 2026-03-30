@@ -119,7 +119,7 @@ def run(cfg: DictConfig):
     pylogger.info("Starting testing!")
     trainer.test(model=model, dataloaders=test_dataloaders)
 
-    upload_model_to_hf(model.encoder, cfg.nn.encoder.model_name, "multitask_trained_from_scratch")
+    #upload_model_to_hf(model.encoder, cfg.nn.encoder.model_name, "multitask_trained_from_scratch")
 
     logger.log_configuration(model, cfg)
 
