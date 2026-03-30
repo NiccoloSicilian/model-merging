@@ -16,7 +16,7 @@ from nn_core.model_logging import NNLogger
 
 from model_merging.model.encoder import ImageEncoder
 from model_merging.model.heads import get_classification_head
-from model_merging.model.image_classifier import MultiTaskImageClassifier 
+from model_merging.model.multitask_classifier import MultiTaskImageClassifier 
 from model_merging.utils.io_utils import load_model_from_hf, upload_model_to_hf
 from hydra.utils import instantiate
 
