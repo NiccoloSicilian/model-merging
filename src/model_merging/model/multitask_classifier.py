@@ -82,19 +82,28 @@ class MultiTaskImageClassifier(pl.LightningModule):
 
             loss = F.cross_entropy(logits, gt_y)
             preds = torch.softmax(logits, dim=-1)
-
-            # Update and log task-specific metrics
+    
+            # 1. Update metric
             metric = self.metrics[f"{split}_acc_{task_name}"]
             metric.update(preds, gt_y)
-
-            self.log_fn(f"acc/{split}/{task_name}", metric)
-            self.log_fn(f"loss/{split}/{task_name}", loss)
-
-            # 4. Accumulate the loss
+    
+            # 2. LOGGING FIX: Use self.log directly with prog_bar=True
+            # We also add batch_size to stop those warnings we saw earlier
+            current_bs = x.shape[0]
+    
+            # Log Task Accuracy
+            self.log(f"{split}/acc/{task_name}", metric, 
+                     prog_bar=True, on_step=(split == "train"), on_epoch=True, batch_size=current_bs)
+            
+            # Log Task Loss
+            self.log(f"{split}/loss/{task_name}", loss, 
+                     prog_bar=False, on_step=(split == "train"), on_epoch=True, batch_size=current_bs)
+    
             total_loss += loss
-
-        # Log the aggregated loss
-        self.log_fn(f"loss/{split}/total", total_loss)
+    
+        # 3. Log the Total Aggregated Loss to the Progress Bar
+        self.log(f"{split}/loss_total", total_loss, 
+                 prog_bar=True, on_step=(split == "train"), on_epoch=True, batch_size=current_bs)
 
         return {"logits": all_logits, "loss": total_loss}
 
