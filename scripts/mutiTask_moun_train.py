@@ -2,7 +2,7 @@ import logging
 import os
 from typing import Dict, List, Union
 # If using PyTorch Lightning 1.x
-from pytorch_lightning.trainer.supporters import CombinedLoader
+from pytorch_lightning.utilities.combined_loader import CombinedLoader
 
 # If using PyTorch Lightning 2.0+
 from lightning.pytorch.utilities import CombinedLoader
