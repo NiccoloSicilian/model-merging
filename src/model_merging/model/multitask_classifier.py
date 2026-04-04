@@ -98,9 +98,21 @@ class MultiTaskImageClassifier(pl.LightningModule):
 
         return {"logits": all_logits, "loss": total_loss}
 
-    def training_step(self, batch: Any, batch_idx: int) -> Mapping[str, Any]:
-        # During training, 'batch' is a dictionary of tasks. We can pass it directly.
-        return self._step(batch_dict=batch, split="train")
+    def training_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Mapping[str, Any]:
+        # SAFETY CHECK: PyTorch Lightning's CombinedLoader sometimes wraps the output 
+        # into a tuple formatted as (batch_data, batch_idx, dataloader_idx). 
+        # This unpacks it if necessary.
+        if isinstance(batch, tuple) and len(batch) == 3 and isinstance(batch[2], int):
+            batch, _, dataloader_idx = batch
+
+        # 1. Use the dataloader index to find the name of the current task
+        task_name = self.task_names[dataloader_idx]
+        
+        # 2. Wrap the single batch in a dictionary so _step() knows how to read it
+        wrapped_batch = {task_name: batch}
+        
+        # 3. Pass it to your existing logic
+        return self._step(batch_dict=wrapped_batch, split="train")
 
     def validation_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Mapping[str, Any]:
         # During val, 'batch' is a single batch. We use dataloader_idx to find the name, 
