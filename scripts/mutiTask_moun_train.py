@@ -63,7 +63,6 @@ def run(cfg: DictConfig):
 
     classification_heads = nn.ModuleDict()
     train_dataloaders = {}
-    val_dataloaders = {}
     test_dataloaders = {}
 
     # Iterate over the LIST of datasets provided by the N14/N8 benchmark
@@ -97,7 +96,6 @@ def run(cfg: DictConfig):
             batch_size=cfg.train.batch_size,
         )
         train_dataloaders[task_name] = task_dataset.train_loader
-        val_dataloaders[task_name] = task_dataset.val_loader   # <--- Add this
         test_dataloaders[task_name] = task_dataset.test_loader
 
     # 3. Instantiate our custom MultiTask model
@@ -116,14 +114,12 @@ def run(cfg: DictConfig):
         **cfg.train.trainer,
     )
     sequential_train_loaders = CombinedLoader(train_dataloaders, mode="sequential")
-    sequential_val_loaders = CombinedLoader(val_dataloaders, mode="sequential")
     # ------------------------------------------------------
 
     pylogger.info("Starting training!")
     trainer.fit(
         model=model,
         train_dataloaders=sequential_train_loaders,
-        val_dataloaders=sequential_val_loaders, # <--- Pass it here
     )
 
     pylogger.info("Starting testing!")
