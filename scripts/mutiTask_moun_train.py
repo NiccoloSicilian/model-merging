@@ -1,7 +1,11 @@
 import logging
 import os
 from typing import Dict, List, Union
+# If using PyTorch Lightning 1.x
+from pytorch_lightning.trainer.supporters import CombinedLoader
 
+# If using PyTorch Lightning 2.0+
+from lightning.pytorch.utilities import CombinedLoader
 import hydra
 import omegaconf
 import pytorch_lightning as pl
@@ -109,15 +113,19 @@ def run(cfg: DictConfig):
         enable_checkpointing=False,
         **cfg.train.trainer,
     )
+    sequential_train_loaders = CombinedLoader(train_dataloaders, mode="sequential")
+    # ------------------------------------------------------
 
     pylogger.info("Starting training!")
     trainer.fit(
         model=model,
-        train_dataloaders=train_dataloaders,
+        train_dataloaders=sequential_train_loaders, # Pass the wrapped loader here
     )
 
     pylogger.info("Starting testing!")
-    trainer.test(model=model, dataloaders=test_dataloaders)
+    # You can also do this for testing to save VRAM during validation
+    sequential_test_loaders = CombinedLoader(test_dataloaders, mode="sequential")
+    trainer.test(model=model, dataloaders=sequential_test_loaders)
 
     #upload_model_to_hf(model.encoder, cfg.nn.encoder.model_name, "multitask_trained_from_scratch")
 
