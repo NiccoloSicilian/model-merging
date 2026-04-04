@@ -117,6 +117,8 @@ class MultiTaskImageClassifier(pl.LightningModule):
     def validation_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Mapping[str, Any]:
         # During val, 'batch' is a single batch. We use dataloader_idx to find the name, 
         # and wrap it in a dict so _step knows how to read it.
+        if isinstance(batch, tuple) and len(batch) == 3 and isinstance(batch[2], int):
+            batch, _, dataloader_idx = batch
         task_name = self.task_names[dataloader_idx]
         wrapped_batch = {task_name: batch}
         return self._step(batch_dict=wrapped_batch, split="val")
