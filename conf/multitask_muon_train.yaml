@@ -10,8 +10,8 @@ core:
 defaults:
   - hydra: default
   - nn: multitask_train
-  - train: finetune
-  - benchmark: N14  # <-- THIS IS THE MAGIC LINE! It replaces "- dataset: MNIST"
+  - train: multitask
+  - benchmark: N8 
   - override hydra/launcher: basic
   - _self_ # as last argument to allow the override of parameters via this main config
 # Add this to the bottom of your main config file
