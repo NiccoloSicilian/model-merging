@@ -63,49 +63,57 @@ class MultiTaskImageClassifier(pl.LightningModule):
         return logits
 
     def _step(self, batch_dict: Dict[str, Any], split: str) -> Mapping[str, Any]:
-        """ 
-        PyTorch Lightning will pass a dict of batches if given a dict of dataloaders.
-        Format: {"task1": batch_for_task1, "task2": batch_for_task2}
-        """
         total_loss = 0.0
         all_logits = {}
+        task_accuracies = []
 
-        # 3. Iterate through all tasks present in the current batch
+        current_bs = 0
         for task_name, task_batch in batch_dict.items():
             task_batch = maybe_dictionarize(task_batch, self.hparams.x_key, self.hparams.y_key)
 
             x = task_batch[self.hparams.x_key]
             gt_y = task_batch[self.hparams.y_key]
+            current_bs = x.shape[0]
 
             logits = self(x, task_name)
             all_logits[task_name] = logits.detach()
 
             loss = F.cross_entropy(logits, gt_y)
-            preds = torch.softmax(logits, dim=-1)
-    
-            # 1. Update metric
-            metric = self.metrics[f"{split}_acc_{task_name}"]
-            metric.update(preds, gt_y)
-    
-            # 2. LOGGING FIX: Use self.log directly with prog_bar=True
-            # We also add batch_size to stop those warnings we saw earlier
-            current_bs = x.shape[0]
-    
-            # Log Task Accuracy
-            self.log(f"{split}/acc/{task_name}", metric, 
-                     prog_bar=True, on_step=(split == "train"), on_epoch=True, batch_size=current_bs)
             
-            # Log Task Loss
+            # Update and compute metric
+            metric = self.metrics[f"{split}_acc_{task_name}"]
+            acc = metric(logits, gt_y)
+            task_accuracies.append(acc)
+
+            # Individual Task Logs (prog_bar=False to clean up the UI)
+            self.log(f"{split}/acc/{task_name}", metric, 
+                     prog_bar=False, on_step=False, on_epoch=True, batch_size=current_bs)
+            
             self.log(f"{split}/loss/{task_name}", loss, 
-                     prog_bar=False, on_step=(split == "train"), on_epoch=True, batch_size=current_bs)
-    
+                     prog_bar=False, on_step=False, on_epoch=True, batch_size=current_bs)
+            
             total_loss += loss
-    
-        # 3. Log the Total Aggregated Loss to the Progress Bar
+
+        # --- NEW AGGREGATED LOGS ---
+        # 1. Mean Accuracy across tasks in this step
+        mean_acc = torch.stack(task_accuracies).mean()
+        
+        # 2. Log Total Loss and Mean Acc to Progress Bar
         self.log(f"{split}/loss_total", total_loss, 
+                 prog_bar=True, on_step=(split == "train"), on_epoch=True, batch_size=current_bs)
+        
+        self.log(f"{split}/acc_mean", mean_acc, 
                  prog_bar=True, on_step=(split == "train"), on_epoch=True, batch_size=current_bs)
 
         return {"logits": all_logits, "loss": total_loss}
+
+    # Add this to get a clean summary after each validation run
+    def on_validation_epoch_end(self):
+        # This will print a nice table in your console/logs every epoch
+        pylogger.info(f"----- Epoch {self.current_epoch} Validation Summary -----")
+        for task_name in self.task_names:
+            acc = self.metrics[f"val_acc_{task_name}"].compute()
+            pylogger.info(f"{task_name:10}: {acc:.4f}")
 
     def training_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Mapping[str, Any]:
         # SAFETY CHECK: PyTorch Lightning's CombinedLoader sometimes wraps the output 
