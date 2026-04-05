@@ -27,18 +27,34 @@ from hydra.utils import instantiate
 pylogger = logging.getLogger(__name__)
 torch.set_float32_matmul_precision("high")
 def reset_all_weights(model: nn.Module) -> None:
-    """
-    Resets all layers using their own built-in reset logic.
-    This correctly handles ALL layer types including ViT attention layers.
-    """
     @torch.no_grad()
     def weight_reset(m: nn.Module):
-        # Check if the module has a reset_parameters method
+        # 1. Use built-in reset if available
         reset_parameters = getattr(m, "reset_parameters", None)
         if callable(reset_parameters):
             m.reset_parameters()
-        else:
-            pylogger.warning(f"No reset_parameters: {type(m).__name__}")
+            return
+
+        # 2. Handle OpenCLIP's MultiheadAttention manually
+        # (it wraps nn.MultiheadAttention internals directly as raw Parameters)
+        if type(m).__name__ == "MultiheadAttention":
+            if hasattr(m, "in_proj_weight") and m.in_proj_weight is not None:
+                nn.init.xavier_uniform_(m.in_proj_weight)
+            if hasattr(m, "in_proj_bias") and m.in_proj_bias is not None:
+                nn.init.zeros_(m.in_proj_bias)
+            if hasattr(m, "out_proj"):
+                nn.init.xavier_uniform_(m.out_proj.weight)
+                if m.out_proj.bias is not None:
+                    nn.init.zeros_(m.out_proj.bias)
+
+        # 3. Handle ResidualAttentionBlock (has learned scale params)
+        if type(m).__name__ == "ResidualAttentionBlock":
+            if hasattr(m, "ln_1"):
+                nn.init.ones_(m.ln_1.weight)
+                nn.init.zeros_(m.ln_1.bias)
+            if hasattr(m, "ln_2"):
+                nn.init.ones_(m.ln_2.weight)
+                nn.init.zeros_(m.ln_2.bias)
 
     model.apply(weight_reset)
 def run(cfg: DictConfig):
