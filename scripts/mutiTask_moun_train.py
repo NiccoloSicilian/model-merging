@@ -26,17 +26,21 @@ from hydra.utils import instantiate
 
 pylogger = logging.getLogger(__name__)
 torch.set_float32_matmul_precision("high")
-def scramble_weights(m):
-    """Recursively initializes weights to random noise."""
-    if isinstance(m, (nn.Linear, nn.Conv2d)):
-        nn.init.normal_(m.weight, std=0.02)
-        if m.bias is not None:
-            nn.init.zeros_(m.bias)
-    elif isinstance(m, (nn.LayerNorm, nn.BatchNorm2d)):
-        nn.init.ones_(m.weight)
-        nn.init.zeros_(m.bias)
-    elif isinstance(m, nn.Embedding):
-        nn.init.normal_(m.weight, std=0.02)
+def reset_all_weights(model: nn.Module) -> None:
+    """
+    Resets all layers using their own built-in reset logic.
+    This correctly handles ALL layer types including ViT attention layers.
+    """
+    @torch.no_grad()
+    def weight_reset(m: nn.Module):
+        # Check if the module has a reset_parameters method
+        reset_parameters = getattr(m, "reset_parameters", None)
+        if callable(reset_parameters):
+            m.reset_parameters()
+        else:
+            pylogger.warning(f"No reset_parameters: {type(m).__name__}")
+
+    model.apply(weight_reset)
 def run(cfg: DictConfig):
     seed_index_everything(cfg)
 
@@ -57,8 +61,8 @@ def run(cfg: DictConfig):
         param.requires_grad = True
 
     # ---- NEW: SCRAMBLE THE ENCODER TO START FROM ZERO ----
-    pylogger.info("Scrambling encoder weights to start from pure scratch!")
-    zeroshot_encoder.apply(scramble_weights)
+    pylogger.info("Resetting all encoder weights for from-scratch training!")
+    reset_all_weights(zeroshot_encoder)
     # ------------------------------------------------------
 
     classification_heads = nn.ModuleDict()
@@ -83,16 +87,14 @@ def run(cfg: DictConfig):
             param.requires_grad = True
             
         # This overwrites any pre-trained or zero-shot weights with random noise
-        nn.init.normal_(head.weight, std=0.02)
-        if head.bias is not None:
-            nn.init.zeros_(head.bias)
+        reset_all_weights(head)
             
         classification_heads[task_name] = head
 
         # 2. Instantiate the dataset
         task_dataset = instantiate(
             task_config, 
-            preprocess_fn=zeroshot_encoder.val_preprocess,
+            preprocess_fn=zeroshot_encoder.train_preprocess,
             batch_size=cfg.train.batch_size,
         )
         train_dataloaders[task_name] = task_dataset.train_loader
