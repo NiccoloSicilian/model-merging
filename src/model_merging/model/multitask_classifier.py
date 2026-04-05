@@ -1,6 +1,7 @@
 import logging
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple, Union
-
+from rich.table import Table
+from rich.console import Console
 import hydra
 import pytorch_lightning as pl
 import torch
@@ -66,11 +67,14 @@ class MultiTaskImageClassifier(pl.LightningModule):
         total_loss = 0.0
         all_logits = {}
         task_accuracies = []
-
         current_bs = 0
+
+        # Get the total epochs from the trainer to display it
+        # We use getattr because during the very first setup call, trainer might not be fully attached
+        total_epochs = getattr(self.trainer, "max_epochs", 0)
+
         for task_name, task_batch in batch_dict.items():
             task_batch = maybe_dictionarize(task_batch, self.hparams.x_key, self.hparams.y_key)
-
             x = task_batch[self.hparams.x_key]
             gt_y = task_batch[self.hparams.y_key]
             current_bs = x.shape[0]
@@ -80,25 +84,25 @@ class MultiTaskImageClassifier(pl.LightningModule):
 
             loss = F.cross_entropy(logits, gt_y)
             
-            # Update and compute metric
+            # Update metric and collect for mean calculation
             metric = self.metrics[f"{split}_acc_{task_name}"]
             acc = metric(logits, gt_y)
             task_accuracies.append(acc)
 
-            # Individual Task Logs (prog_bar=False to clean up the UI)
+            # Log individual tasks to logger only (cleaner progress bar)
             self.log(f"{split}/acc/{task_name}", metric, 
-                     prog_bar=False, on_step=False, on_epoch=True, batch_size=current_bs)
-            
-            self.log(f"{split}/loss/{task_name}", loss, 
                      prog_bar=False, on_step=False, on_epoch=True, batch_size=current_bs)
             
             total_loss += loss
 
-        # --- NEW AGGREGATED LOGS ---
-        # 1. Mean Accuracy across tasks in this step
+        # Calculate Mean Accuracy across the 8 tasks
         mean_acc = torch.stack(task_accuracies).mean()
         
-        # 2. Log Total Loss and Mean Acc to Progress Bar
+        # --- LOGGING TO PROGRESS BAR ---
+        # 1. Show which epoch we are on out of the total
+        self.log("total_epochs", float(total_epochs), prog_bar=True, on_step=False, on_epoch=True)
+        
+        # 2. Show the core training metrics
         self.log(f"{split}/loss_total", total_loss, 
                  prog_bar=True, on_step=(split == "train"), on_epoch=True, batch_size=current_bs)
         
@@ -106,7 +110,43 @@ class MultiTaskImageClassifier(pl.LightningModule):
                  prog_bar=True, on_step=(split == "train"), on_epoch=True, batch_size=current_bs)
 
         return {"logits": all_logits, "loss": total_loss}
+    def on_train_epoch_end(self):
+        # 1. Initialize Rich Console for a beautiful table
+        console = Console()
+        table = Table(title=f"📊 Epoch {self.current_epoch} Summary", show_header=True, header_style="bold magenta")
+        
+        table.add_column("Dataset", style="cyan", width=20)
+        table.add_column("Accuracy", justify="right", style="green")
 
+        total_acc = 0.0
+        count = 0
+
+        # 2. Collect results for each task
+        for task_name in self.task_names:
+            # Retrieve the metric value for this epoch
+            metric = self.metrics[f"train_acc_{task_name}"]
+            acc = metric.compute()
+            
+            table.add_row(task_name, f"{acc:.4f}")
+            
+            total_acc += acc
+            count += 1
+            
+            # Reset metric for the next epoch so it doesn't accumulate 
+            # (Lightning usually does this, but manual compute() needs a reset)
+            metric.reset()
+
+        # 3. Calculate Average
+        avg_acc = total_acc / count if count > 0 else 0
+        
+        table.add_section()
+        table.add_row("OVERALL AVG", f"{avg_acc:.4f}", style="bold yellow")
+
+        # 4. Print to terminal
+        console.print(table)
+        
+        # 5. Log the average to your logger (WandB/Tensorboard)
+        self.log("train/acc_epoch_mean", avg_acc, on_epoch=True, prog_bar=True)
     # Add this to get a clean summary after each validation run
     def on_validation_epoch_end(self):
         # This will print a nice table in your console/logs every epoch
