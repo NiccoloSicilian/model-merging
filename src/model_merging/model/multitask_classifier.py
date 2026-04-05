@@ -218,7 +218,7 @@ class MultiTaskImageClassifier(pl.LightningModule):
         if self.finetuning_accuracy is not None:
             for task_name, baseline_acc in self.finetuning_accuracy.items():
                 accuracy = (
-                    self.trainer.callback_metrics[f"acc/test/{task_name}"].cpu().item()
+                    self.trainer.callback_metrics[f"test/acc/{task_name}"].cpu().item()
                 )
                 normalized_acc = accuracy / baseline_acc
                 self.log_fn(f"normalized_acc/test/{task_name}", normalized_acc)
