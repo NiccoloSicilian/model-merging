@@ -84,8 +84,7 @@ class MultiTaskImageClassifier(pl.LightningModule):
 
             logits = self(x, task_name)
             all_logits[task_name] = logits.detach()
-
-            loss = F.cross_entropy(logits, gt_y)
+            loss = F.cross_entropy(logits, gt_y, label_smoothing=0.1)
             
             # Update metric and collect for mean calculation
             metric = self.metrics[f"{split}_acc_{task_name}"]
