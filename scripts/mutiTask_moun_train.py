@@ -3,7 +3,8 @@ import os
 from typing import Dict, List, Union
 # If using PyTorch Lightning 1.x
 from pytorch_lightning.utilities.combined_loader import CombinedLoader
-
+import torch.distributed as dist
+    
 # If using PyTorch Lightning 2.0+
 from lightning.pytorch.utilities import CombinedLoader
 import hydra
@@ -133,7 +134,13 @@ def run(cfg: DictConfig):
     )
     sequential_train_loaders = CombinedLoader(train_dataloaders, mode="sequential")
     # ------------------------------------------------------
-
+    
+    if not dist.is_initialized():
+        os.environ.setdefault("MASTER_ADDR", "localhost")
+        os.environ.setdefault("MASTER_PORT", "29500")
+        os.environ.setdefault("RANK", "0")
+        os.environ.setdefault("WORLD_SIZE", "1")
+        dist.init_process_group(backend="nccl")
     pylogger.info("Starting training!")
     trainer.fit(
         model=model,
