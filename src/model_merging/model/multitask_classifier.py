@@ -77,6 +77,8 @@ class MultiTaskImageClassifier(pl.LightningModule):
         for task_name, task_batch in batch_dict.items():
             task_batch = maybe_dictionarize(task_batch, self.hparams.x_key, self.hparams.y_key)
             x = task_batch[self.hparams.x_key]
+            if isinstance(x, list):
+                x = torch.stack(x)
             gt_y = task_batch[self.hparams.y_key]
             current_bs = x.shape[0]
 
@@ -182,7 +184,8 @@ class MultiTaskImageClassifier(pl.LightningModule):
         return self._step(batch_dict=wrapped_batch, split="val")
 
     def test_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Mapping[str, Any]:
-        # Same as validation!
+        if isinstance(batch, tuple) and len(batch) == 3 and isinstance(batch[2], int):
+            batch, _, dataloader_idx = batch
         task_name = self.task_names[dataloader_idx]
         wrapped_batch = {task_name: batch}
         return self._step(batch_dict=wrapped_batch, split="test")
