@@ -198,7 +198,7 @@ class MultiTaskImageClassifier(pl.LightningModule):
     def configure_optimizers(self):
         # Muon: internal 2D encoder weights only
         hidden_weights = [
-            p for name, p in self.encoder.named_parameters()
+            p for name, p in self.named_parameters()
             if p.requires_grad
             and p.ndim >= 2
             and not any(x in name for x in [
