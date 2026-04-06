@@ -10,11 +10,18 @@ dataset_names: {eval_dataset}
 image_encoder: ??  
 classification_heads: ??
 
+#optimizer:
+#  _target_: torch.optim.AdamW
+#  lr: 1e-5
+#  weight_decay: 0.1
+  
 optimizer:
-  _target_: torch.optim.AdamW
-  lr: 1e-5
-  weight_decay: 0.1
+  lr: 0.02
+  momentum: 0.95
+  nesterov: true
+  adamw_lr: 3e-4
+  adamw_wd: 0.1
 
 lr_scheduler:
   _target_: torch.optim.lr_scheduler.CosineAnnealingLR
-  T_max: 10
+  T_max: ${train.trainer.max_epochs}
