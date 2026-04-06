@@ -58,6 +58,56 @@ def reset_all_weights(model: nn.Module) -> None:
                 nn.init.zeros_(m.ln_2.bias)
 
     model.apply(weight_reset)
+def verify_weights_are_random(model: nn.Module, model_name: str = "model"):
+    """
+    Compares model weights against a freshly initialized version
+    to verify no pretrained weights survived the reset.
+    """
+    pylogger.info(f"Verifying weight reset for {model_name}...")
+    
+    stats = []
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            mean = param.data.mean().item()
+            std = param.data.std().item()
+            abs_max = param.data.abs().max().item()
+            stats.append((name, mean, std, abs_max))
+
+    # Print summary table
+    console = Console()
+    table = Table(title=f"Weight Stats: {model_name}", header_style="bold magenta")
+    table.add_column("Layer", style="cyan", width=50)
+    table.add_column("Mean", justify="right")
+    table.add_column("Std", justify="right")
+    table.add_column("AbsMax", justify="right")
+    table.add_column("OK?", justify="center")
+
+    all_ok = True
+    for name, mean, std, abs_max in stats:
+        # Pretrained ViT weights tend to have very small mean and specific std ranges
+        # Random init should have mean ~0 and std that varies by layer type
+        mean_ok = abs(mean) < 0.1        # mean should be near 0
+        std_ok = 0.0 < std < 1.0         # std should be reasonable
+        frozen_ok = std > 1e-6           # not all zeros or constants
+        ok = mean_ok and std_ok and frozen_ok
+        
+        if not ok:
+            all_ok = False
+
+        table.add_row(
+            name,
+            f"{mean:.4f}",
+            f"{std:.4f}",
+            f"{abs_max:.4f}",
+            "✅" if ok else "❌"
+        )
+
+    console.print(table)
+
+    if all_ok:
+        pylogger.info("✅ All weights look properly randomized!")
+    else:
+        pylogger.warning("❌ Some weights may not have been reset correctly!")
 def run(cfg: DictConfig):
     seed_index_everything(cfg)
 
@@ -79,7 +129,9 @@ def run(cfg: DictConfig):
 
     # ---- NEW: SCRAMBLE THE ENCODER TO START FROM ZERO ----
     pylogger.info("Resetting all encoder weights for from-scratch training!")
+    
     reset_all_weights(zeroshot_encoder)
+    verify_weights_are_random(zeroshot_encoder, "ViT-B/16 Encoder")
     # ------------------------------------------------------
 
     classification_heads = nn.ModuleDict()
@@ -105,6 +157,7 @@ def run(cfg: DictConfig):
             
         # This overwrites any pre-trained or zero-shot weights with random noise
         reset_all_weights(head)
+        verify_weights_are_random(head, f"Head_{task_name}")
             
         classification_heads[task_name] = head
 
