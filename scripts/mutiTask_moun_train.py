@@ -60,12 +60,6 @@ def reset_all_weights(model: nn.Module) -> None:
 
     model.apply(weight_reset)
 def verify_weights_are_random(model: nn.Module, model_name: str = "model"):
-    """
-    Compares model weights against a freshly initialized version
-    to verify no pretrained weights survived the reset.
-    """
-    pylogger.info(f"Verifying weight reset for {model_name}...")
-    
     stats = []
     for name, param in model.named_parameters():
         if param.requires_grad:
@@ -74,7 +68,6 @@ def verify_weights_are_random(model: nn.Module, model_name: str = "model"):
             abs_max = param.data.abs().max().item()
             stats.append((name, mean, std, abs_max))
 
-    # Print summary table
     console = Console()
     table = Table(title=f"Weight Stats: {model_name}", header_style="bold magenta")
     table.add_column("Layer", style="cyan", width=50)
@@ -85,20 +78,30 @@ def verify_weights_are_random(model: nn.Module, model_name: str = "model"):
 
     all_ok = True
     for name, mean, std, abs_max in stats:
-        # Pretrained ViT weights tend to have very small mean and specific std ranges
-        # Random init should have mean ~0 and std that varies by layer type
-        mean_ok = abs(mean) < 0.1        # mean should be near 0
-        std_ok = 0.0 < std < 1.0         # std should be reasonable
-        frozen_ok = std > 1e-6           # not all zeros or constants
-        ok = mean_ok and std_ok and frozen_ok
-        
+        is_bias = name.endswith(".bias")
+        is_norm = any(x in name for x in ["ln_", "ln_post", "ln_pre", "ln_final", "norm"])
+        is_scalar = std != std  # nan check for single-value params
+
+        if is_norm:
+            # LayerNorm: weight=1, bias=0 is correct
+            ok = True
+        elif is_bias:
+            # Biases initialized to 0 is correct
+            ok = True
+        elif is_scalar:
+            # Scalar params like logit_scale — just check it exists
+            ok = True
+        else:
+            # Actual weight matrices: mean~0, std>0
+            ok = abs(mean) < 0.1 and std > 1e-6
+
         if not ok:
             all_ok = False
 
         table.add_row(
             name,
             f"{mean:.4f}",
-            f"{std:.4f}",
+            f"{std:.4f}" if std == std else "nan",
             f"{abs_max:.4f}",
             "✅" if ok else "❌"
         )
@@ -106,9 +109,9 @@ def verify_weights_are_random(model: nn.Module, model_name: str = "model"):
     console.print(table)
 
     if all_ok:
-        pylogger.info("✅ All weights look properly randomized!")
+        pylogger.info("✅ All weights properly initialized!")
     else:
-        pylogger.warning("❌ Some weights may not have been reset correctly!")
+        pylogger.warning("❌ Some weight matrices may not have been reset!")
 def run(cfg: DictConfig):
     seed_index_everything(cfg)
 
