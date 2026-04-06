@@ -247,10 +247,34 @@ class MultiTaskImageClassifier(pl.LightningModule):
         self.finetuning_accuracy = finetuning_accuracy
 
     def on_test_epoch_end(self):
+        console = Console()
+        table = Table(title="🧪 Test Results", show_header=True, header_style="bold cyan")
+        
+        table.add_column("Dataset", style="cyan", width=20)
+        table.add_column("Accuracy", justify="right", style="green")
+    
+        total_acc = 0.0
+        count = 0
+    
+        for task_name in self.task_names:
+            metric = self.metrics[f"test_acc_{task_name}"]
+            acc = metric.compute()
+            
+            table.add_row(task_name, f"{acc:.4f}")
+            total_acc += acc
+            count += 1
+            metric.reset()
+    
+        avg_acc = total_acc / count if count > 0 else 0
+        table.add_section()
+        table.add_row("OVERALL AVG", f"{avg_acc:.4f}", style="bold yellow")
+        console.print(table)
+    
+        self.log("test/acc_epoch_mean", avg_acc, on_epoch=True, prog_bar=True)
+    
+        # Keep existing normalized accuracy logic
         if self.finetuning_accuracy is not None:
             for task_name, baseline_acc in self.finetuning_accuracy.items():
-                accuracy = (
-                    self.trainer.callback_metrics[f"test/acc/{task_name}"].cpu().item()
-                )
+                accuracy = self.trainer.callback_metrics[f"test/acc/{task_name}"].cpu().item()
                 normalized_acc = accuracy / baseline_acc
                 self.log_fn(f"normalized_acc/test/{task_name}", normalized_acc)
