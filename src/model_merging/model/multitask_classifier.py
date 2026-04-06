@@ -9,6 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchmetrics
 from torch.optim import Optimizer
+from muon import Muon
 
 from nn_core.model_logging import NNLogger
 
@@ -192,10 +193,10 @@ class MultiTaskImageClassifier(pl.LightningModule):
             head.weight.requires_grad_(False)
             head.bias.requires_grad_(False)
 
-    from muon import Muon
 
     def configure_optimizers(self):
         # Muon: internal 2D encoder weights only
+        print(self.hparams)
         muon_params = [
             p for name, p in self.encoder.named_parameters()
             if p.requires_grad 
