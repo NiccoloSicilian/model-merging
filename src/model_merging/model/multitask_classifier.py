@@ -192,13 +192,42 @@ class MultiTaskImageClassifier(pl.LightningModule):
             head.weight.requires_grad_(False)
             head.bias.requires_grad_(False)
 
-    def configure_optimizers(
-        self,
-    ) -> Union[Optimizer, Tuple[Sequence[Optimizer], Sequence[Any]]]:
-        opt = hydra.utils.instantiate(self.hparams.optimizer, params=self.parameters())
+    from muon import Muon
+
+    def configure_optimizers(self):
+        # Muon: internal 2D encoder weights only
+        muon_params = [
+            p for name, p in self.encoder.named_parameters()
+            if p.requires_grad 
+            and p.ndim >= 2
+            and not any(x in name for x in [
+                "embedding", "patch_embed", "cls_token", "pos_embed"
+            ])
+        ]
+    
+        # AdamW: everything else — biases, norms, embeddings, all heads
+        muon_param_ids = {id(p) for p in muon_params}
+        adamw_params = [
+            p for p in self.parameters()
+            if p.requires_grad and id(p) not in muon_param_ids
+        ]
+    
+        opt = Muon(
+            muon_params=muon_params,
+            lr=self.hparams.optimizer.lr,
+            momentum=self.hparams.optimizer.momentum,
+            nesterov=self.hparams.optimizer.nesterov,
+            adamw_params=adamw_params,
+            adamw_lr=self.hparams.optimizer.adamw_lr,
+            adamw_wd=self.hparams.optimizer.adamw_wd,
+        )
+    
         if "lr_scheduler" not in self.hparams:
             return [opt]
-        scheduler = hydra.utils.instantiate(self.hparams.lr_scheduler, optimizer=opt)
+    
+        scheduler = hydra.utils.instantiate(
+            self.hparams.lr_scheduler, optimizer=opt
+        )
         return [opt], [scheduler]
 
     def save(self, filename):
