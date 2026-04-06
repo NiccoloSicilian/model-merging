@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchmetrics
 from torch.optim import Optimizer
-from muon import Muon
+from muon import MuonWithAuxAdam
 
 from nn_core.model_logging import NNLogger
 
@@ -194,34 +194,36 @@ class MultiTaskImageClassifier(pl.LightningModule):
             head.bias.requires_grad_(False)
 
 
+
     def configure_optimizers(self):
         # Muon: internal 2D encoder weights only
-        print(self.hparams)
-        muon_params = [
+        hidden_weights = [
             p for name, p in self.encoder.named_parameters()
-            if p.requires_grad 
+            if p.requires_grad
             and p.ndim >= 2
             and not any(x in name for x in [
                 "embedding", "patch_embed", "cls_token", "pos_embed"
             ])
         ]
     
-        # AdamW: everything else — biases, norms, embeddings, all heads
-        muon_param_ids = {id(p) for p in muon_params}
+        # AdamW: encoder biases/norms/embeddings + all classification heads
+        muon_param_ids = {id(p) for p in hidden_weights}
         adamw_params = [
             p for p in self.parameters()
             if p.requires_grad and id(p) not in muon_param_ids
         ]
     
-        opt = Muon(
-            muon_params=muon_params,
-            lr=self.hparams.optimizer.lr,
-            momentum=self.hparams.optimizer.momentum,
-            nesterov=self.hparams.optimizer.nesterov,
-            adamw_params=adamw_params,
-            adamw_lr=self.hparams.optimizer.adamw_lr,
-            adamw_wd=self.hparams.optimizer.adamw_wd,
-        )
+        param_groups = [
+            dict(params=hidden_weights, use_muon=True,
+                 lr=self.hparams.optimizer.lr,
+                 weight_decay=self.hparams.optimizer.adamw_wd),
+            dict(params=adamw_params, use_muon=False,
+                 lr=self.hparams.optimizer.adamw_lr,
+                 betas=(0.9, 0.95),
+                 weight_decay=self.hparams.optimizer.adamw_wd),
+        ]
+    
+        opt = MuonWithAuxAdam(param_groups)
     
         if "lr_scheduler" not in self.hparams:
             return [opt]
