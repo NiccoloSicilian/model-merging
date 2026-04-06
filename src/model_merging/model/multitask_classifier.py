@@ -69,11 +69,7 @@ class MultiTaskImageClassifier(pl.LightningModule):
         all_logits = {}
         task_accuracies = []
         current_bs = 0
-
-        # Get the total epochs from the trainer to display it
-        # We use getattr because during the very first setup call, trainer might not be fully attached
-        total_epochs = getattr(self.trainer, "max_epochs", 0)
-
+    
         for task_name, task_batch in batch_dict.items():
             task_batch = maybe_dictionarize(task_batch, self.hparams.x_key, self.hparams.y_key)
             x = task_batch[self.hparams.x_key]
@@ -81,36 +77,39 @@ class MultiTaskImageClassifier(pl.LightningModule):
                 x = torch.stack(x)
             gt_y = task_batch[self.hparams.y_key]
             current_bs = x.shape[0]
-
+    
             logits = self(x, task_name)
             all_logits[task_name] = logits.detach()
+    
             loss = F.cross_entropy(logits, gt_y, label_smoothing=0.1)
-            
-            # Update metric and collect for mean calculation
+            total_loss += loss / len(batch_dict)
+    
+            # Per-task accuracy — epoch level only, not progress bar
             metric = self.metrics[f"{split}_acc_{task_name}"]
             acc = metric(logits, gt_y)
             task_accuracies.append(acc)
-
-            # Log individual tasks to logger only (cleaner progress bar)
-            self.log(f"{split}/acc/{task_name}", metric, 
-                     prog_bar=False, on_step=False, on_epoch=True, batch_size=current_bs)
-            
-            total_loss += loss
-
-        # Calculate Mean Accuracy across the 8 tasks
+    
+            self.log(f"{split}/acc/{task_name}", metric,
+                     prog_bar=False, on_step=False, on_epoch=True,
+                     batch_size=current_bs)
+    
+            # Per-task loss — useful to detect if one task is dominating
+            self.log(f"{split}/loss/{task_name}", loss,
+                     prog_bar=False, on_step=False, on_epoch=True,
+                     batch_size=current_bs)
+    
+        # Mean accuracy — only meaningful at epoch level since each step has 1 task
         mean_acc = torch.stack(task_accuracies).mean()
-        
-        # --- LOGGING TO PROGRESS BAR ---
-        # 1. Show which epoch we are on out of the total
-        self.log("total_epochs", float(total_epochs), prog_bar=True, on_step=False, on_epoch=True)
-        
-        # 2. Show the core training metrics
-        self.log(f"{split}/loss_total", total_loss, 
-                 prog_bar=True, on_step=(split == "train"), on_epoch=True, batch_size=current_bs)
-        
-        self.log(f"{split}/acc_mean", mean_acc, 
-                 prog_bar=True, on_step=(split == "train"), on_epoch=True, batch_size=current_bs)
-
+    
+        # Progress bar: only total loss and mean acc, step-level for train
+        self.log(f"{split}/loss", total_loss,
+                 prog_bar=True, on_step=(split == "train"), on_epoch=True,
+                 batch_size=current_bs)
+    
+        self.log(f"{split}/acc_mean", mean_acc,
+                 prog_bar=False, on_step=False, on_epoch=True,
+                 batch_size=current_bs)
+    
         return {"logits": all_logits, "loss": total_loss}
     def on_train_epoch_end(self):
         # 1. Initialize Rich Console for a beautiful table
