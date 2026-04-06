@@ -16,11 +16,9 @@ classification_heads: ??
 #  weight_decay: 0.1
   
 optimizer:
-  lr: 0.02
-  momentum: 0.95
-  nesterov: true
-  adamw_lr: 3e-4
-  adamw_wd: 0.1
+  lr: 0.02          # Muon lr for hidden weights
+  adamw_lr: 3e-4    # AdamW lr for everything else
+  adamw_wd: 0.01
 
 lr_scheduler:
   _target_: torch.optim.lr_scheduler.CosineAnnealingLR
