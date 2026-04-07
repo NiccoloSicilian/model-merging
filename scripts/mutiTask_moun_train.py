@@ -112,6 +112,7 @@ def verify_weights_are_random(model: nn.Module, model_name: str = "model"):
         pylogger.info("✅ All weights properly initialized!")
     else:
         pylogger.warning("❌ Some weight matrices may not have been reset!")
+        
 def run(cfg: DictConfig):
     seed_index_everything(cfg)
 
@@ -205,12 +206,31 @@ def run(cfg: DictConfig):
     )
 
     pylogger.info("Starting testing!")
-    # You can also do this for testing to save VRAM during validation
     sequential_test_loaders = CombinedLoader(test_dataloaders, mode="sequential")
     trainer.test(model=model, dataloaders=sequential_test_loaders)
 
-    #upload_model_to_hf(model.encoder, cfg.nn.encoder.model_name, "multitask_trained_from_scratch")
+    # Save the trained encoder and full model
+    pylogger.info("Saving trained model...")
+    save_dir = "/leonardo_scratch/large/userexternal/nsicilia/DualMerging/trained_from_scratch"
+    os.makedirs(save_dir, exist_ok=True)
 
+    # Save the full Lightning model
+    trainer.save_checkpoint(os.path.join(save_dir, "multitask_model.ckpt"))
+
+    # Save just the encoder separately (useful for merging experiments)
+    torch.save(
+        model.encoder.state_dict(),
+        os.path.join(save_dir, "encoder.pt")
+    )
+
+    # Save each classification head separately
+    for task_name, head in model.classifiers.items():
+        torch.save(
+            head.state_dict(),
+            os.path.join(save_dir, f"head_{task_name}.pt")
+        )
+
+    pylogger.info(f"✅ Model saved to {save_dir}")
     logger.log_configuration(model, cfg)
 
     if logger is not None:
