@@ -14,7 +14,6 @@ from muon import MuonWithAuxAdam
 from nn_core.model_logging import NNLogger
 
 from model_merging.data.datamodule import MetaData
-from model_merging.data.dataset import maybe_dictionarize
 from model_merging.utils.utils import torch_load, torch_save
 
 pylogger = logging.getLogger(__name__)
@@ -33,7 +32,6 @@ class MultiTaskImageClassifier(pl.LightningModule):
 
         self.metadata = metadata
         self.encoder = encoder
-        
         # 1. Store classifiers in a ModuleDict so PyTorch registers their parameters correctly
         self.classifiers = nn.ModuleDict(classifiers)
         self.task_names = list(self.classifiers.keys())
@@ -64,53 +62,6 @@ class MultiTaskImageClassifier(pl.LightningModule):
         logits = self.classifiers[task_name](embeddings)
         return logits
 
-    def _step(self, batch_dict: Dict[str, Any], split: str) -> Mapping[str, Any]:
-        total_loss = 0.0
-        all_logits = {}
-        task_accuracies = []
-        current_bs = 0
-    
-        for task_name, task_batch in batch_dict.items():
-            task_batch = maybe_dictionarize(task_batch, self.hparams.x_key, self.hparams.y_key)
-            x = task_batch[self.hparams.x_key]
-            if isinstance(x, list):
-                x = torch.stack(x)
-            gt_y = task_batch[self.hparams.y_key]
-            current_bs = x.shape[0]
-    
-            logits = self(x, task_name)
-            all_logits[task_name] = logits.detach()
-    
-            loss = F.cross_entropy(logits, gt_y, label_smoothing=0.1)
-            total_loss += loss / len(batch_dict)
-    
-            # Per-task accuracy — epoch level only, not progress bar
-            metric = self.metrics[f"{split}_acc_{task_name}"]
-            acc = metric(logits, gt_y)
-            task_accuracies.append(acc)
-    
-            self.log(f"{split}/acc/{task_name}", metric,
-                     prog_bar=False, on_step=False, on_epoch=True,
-                     batch_size=current_bs)
-    
-            # Per-task loss — useful to detect if one task is dominating
-            self.log(f"{split}/loss/{task_name}", loss,
-                     prog_bar=False, on_step=False, on_epoch=True,
-                     batch_size=current_bs)
-    
-        # Mean accuracy — only meaningful at epoch level since each step has 1 task
-        mean_acc = torch.stack(task_accuracies).mean()
-    
-        # Progress bar: only total loss and mean acc, step-level for train
-        self.log(f"{split}/loss", total_loss,
-                 prog_bar=True, on_step=(split == "train"), on_epoch=True,
-                 batch_size=current_bs)
-    
-        self.log(f"{split}/acc_mean", mean_acc,
-                 prog_bar=False, on_step=False, on_epoch=True,
-                 batch_size=current_bs)
-    
-        return {"logits": all_logits, "loss": total_loss}
     def on_train_epoch_end(self):
         # 1. Initialize Rich Console for a beautiful table
         console = Console()
@@ -122,20 +73,12 @@ class MultiTaskImageClassifier(pl.LightningModule):
         total_acc = 0.0
         count = 0
 
-        # 2. Collect results for each task
+        # 2. Collect results for each task — read values Lightning already computed
         for task_name in self.task_names:
-            # Retrieve the metric value for this epoch
-            metric = self.metrics[f"train_acc_{task_name}"]
-            acc = metric.compute()
-            
+            acc = self.trainer.callback_metrics.get(f"train/acc/{task_name}", torch.tensor(0.0))
             table.add_row(task_name, f"{acc:.4f}")
-            
             total_acc += acc
             count += 1
-            
-            # Reset metric for the next epoch so it doesn't accumulate 
-            # (Lightning usually does this, but manual compute() needs a reset)
-            metric.reset()
 
         # 3. Calculate Average
         avg_acc = total_acc / count if count > 0 else 0
@@ -149,44 +92,94 @@ class MultiTaskImageClassifier(pl.LightningModule):
         # 5. Log the average to your logger (WandB/Tensorboard)
         self.log("train/acc_epoch_mean", avg_acc, on_epoch=True, prog_bar=True)
     # Add this to get a clean summary after each validation run
-    def on_validation_epoch_end(self):
-        # This will print a nice table in your console/logs every epoch
-        pylogger.info(f"----- Epoch {self.current_epoch} Validation Summary -----")
-        for task_name in self.task_names:
-            acc = self.metrics[f"val_acc_{task_name}"].compute()
-            pylogger.info(f"{task_name:10}: {acc:.4f}")
-
-    def training_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Mapping[str, Any]:
-        # SAFETY CHECK: PyTorch Lightning's CombinedLoader sometimes wraps the output 
-        # into a tuple formatted as (batch_data, batch_idx, dataloader_idx). 
-        # This unpacks it if necessary.
-        if isinstance(batch, tuple) and len(batch) == 3 and isinstance(batch[2], int):
-            batch, _, dataloader_idx = batch
-
-        # 1. Use the dataloader index to find the name of the current task
-        task_name = self.task_names[dataloader_idx]
+    def on_validation_batch_end(
+        self, outputs: Mapping[str, Any], batch: Any, batch_idx: int, dataloader_idx: int = 0
+    ) -> None:
+        """
+        Useful step-level logging for validation.
+        outputs contains the dictionary returned by validation_step: {"logits": ..., "loss": ...}
+        """
+        batch_loss = outputs.get("loss")
         
-        # 2. Wrap the single batch in a dictionary so _step() knows how to read it
-        wrapped_batch = {task_name: batch}
-        
-        # 3. Pass it to your existing logic
-        return self._step(batch_dict=wrapped_batch, split="train")
+        if batch_loss is not None:
+            # 1. Log to the progress bar for live updates during the validation loop
+            # We set on_step=True and on_epoch=False so it doesn't interfere with your epoch-level averages
+            self.log(
+                "val/batch_loss", 
+                batch_loss, 
+                prog_bar=True, 
+                on_step=True, 
+                on_epoch=False, 
+                sync_dist=True
+            )
+            
+            # 2. Debugging: Log a warning if the loss spikes unexpectedly on a specific batch
+            # (Adjust the 5.0 threshold based on your specific dataset and normal loss scale)
+            if batch_loss > 5.0: 
+                task_name = self.task_names[dataloader_idx]
+                pylogger.warning(
+                    f"⚠️ High validation loss ({batch_loss:.4f}) detected on task '{task_name}' "
+                    f"at batch_idx {batch_idx}."
+                )
 
-    def validation_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Mapping[str, Any]:
-        # During val, 'batch' is a single batch. We use dataloader_idx to find the name, 
-        # and wrap it in a dict so _step knows how to read it.
-        if isinstance(batch, tuple) and len(batch) == 3 and isinstance(batch[2], int):
-            batch, _, dataloader_idx = batch
-        task_name = self.task_names[dataloader_idx]
-        wrapped_batch = {task_name: batch}
-        return self._step(batch_dict=wrapped_batch, split="val")
+    def training_step(self, batch, batch_idx):
+        # Batch from ConcatDataset: (x, y, task_names) where task_names is a list of strings
+        x, gt_y, task_names = batch
 
-    def test_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Mapping[str, Any]:
-        if isinstance(batch, tuple) and len(batch) == 3 and isinstance(batch[2], int):
-            batch, _, dataloader_idx = batch
-        task_name = self.task_names[dataloader_idx]
-        wrapped_batch = {task_name: batch}
-        return self._step(batch_dict=wrapped_batch, split="test")
+        # Group sample indices by task
+        task_indices: Dict[str, list] = {}
+        for i, task_name in enumerate(task_names):
+            task_indices.setdefault(task_name, []).append(i)
+
+        total_loss = 0.0
+        for task_name, indices in task_indices.items():
+            idx = torch.tensor(indices, device=x.device)
+            x_task = x[idx]
+            y_task = gt_y[idx]
+
+            logits = self(x_task, task_name)
+            loss = F.cross_entropy(logits, y_task, label_smoothing=0.1)
+            total_loss += loss / len(task_indices)
+
+            metric = self.metrics[f"train_acc_{task_name}"]
+            acc = metric(logits, y_task)
+            self.log(f"train/acc/{task_name}", acc, on_step=False, on_epoch=True, batch_size=x_task.shape[0], sync_dist=True)
+            self.log(f"train/loss/{task_name}", loss, on_step=False, on_epoch=True, batch_size=x_task.shape[0], sync_dist=True)
+
+        self.log("train/loss", total_loss, prog_bar=True, on_step=True, on_epoch=True, batch_size=x.shape[0], sync_dist=True)
+        return total_loss
+
+    def _labeled_step(self, batch: Any, split: str) -> Mapping[str, Any]:
+        """Shared logic for val/test steps. Batch format: (x, y, task_names)."""
+        x, gt_y, task_names = batch
+
+        task_indices: Dict[str, list] = {}
+        for i, task_name in enumerate(task_names):
+            task_indices.setdefault(task_name, []).append(i)
+
+        total_loss = 0.0
+        for task_name, indices in task_indices.items():
+            idx = torch.tensor(indices, device=x.device)
+            x_task = x[idx]
+            y_task = gt_y[idx]
+
+            logits = self(x_task, task_name)
+            loss = F.cross_entropy(logits, y_task)
+            total_loss += loss / len(task_indices)
+
+            metric = self.metrics[f"{split}_acc_{task_name}"]
+            acc = metric(logits, y_task)
+            self.log(f"{split}/acc/{task_name}", acc, on_step=False, on_epoch=True, batch_size=x_task.shape[0], sync_dist=True)
+            self.log(f"{split}/loss/{task_name}", loss, on_step=False, on_epoch=True, batch_size=x_task.shape[0], sync_dist=True)
+
+        self.log(f"{split}/loss", total_loss, prog_bar=True, on_step=False, on_epoch=True, batch_size=x.shape[0], sync_dist=True)
+        return {"loss": total_loss}
+
+    def validation_step(self, batch: Any, batch_idx: int) -> Mapping[str, Any]:
+        return self._labeled_step(batch, split="val")
+
+    def test_step(self, batch: Any, batch_idx: int) -> Mapping[str, Any]:
+        return self._labeled_step(batch, split="test")
         
     def freeze_heads(self):
         """ Freezes all task heads. """
@@ -199,11 +192,13 @@ class MultiTaskImageClassifier(pl.LightningModule):
     def configure_optimizers(self):
         # Muon: internal 2D encoder weights only
         hidden_weights = [
-            p for name, p in self.named_parameters()
+            p for name, p in self.encoder.named_parameters()
             if p.requires_grad
-            and p.ndim >= 2
+            and p.ndim == 2                  # Muon expects 2D matrices only
             and not any(x in name for x in [
-                "embedding", "patch_embed", "cls_token", "pos_embed"
+                "embedding",                 # positional_embedding, class_embedding
+                "conv1",                     # patch projection (OpenCLIP name)
+                "cls_token",
             ])
         ]
     
@@ -224,6 +219,18 @@ class MultiTaskImageClassifier(pl.LightningModule):
                  weight_decay=self.hparams.optimizer.adamw_wd),
         ]
     
+        muon_ids = {id(p) for p in hidden_weights}
+        console = Console()
+        table = Table(title="Optimizer Assignment", header_style="bold magenta")
+        table.add_column("Parameter", style="cyan", width=60)
+        table.add_column("Shape", justify="right")
+        table.add_column("Optimizer", justify="center")
+        for name, p in self.named_parameters():
+            if p.requires_grad:
+                opt_name = "[green]Muon[/green]" if id(p) in muon_ids else "[yellow]AdamW[/yellow]"
+                table.add_row(name, str(list(p.shape)), opt_name)
+        console.print(table)
+
         opt = MuonWithAuxAdam(param_groups)
     
         if "lr_scheduler" not in self.hparams:
@@ -232,7 +239,7 @@ class MultiTaskImageClassifier(pl.LightningModule):
         scheduler = hydra.utils.instantiate(
             self.hparams.lr_scheduler, optimizer=opt
         )
-        return [opt], [scheduler]
+        return [opt], [{"scheduler": scheduler, "interval": "epoch"}]
 
     def save(self, filename):
         print(f"Saving multi-task image classifier to {filename}")
@@ -258,13 +265,10 @@ class MultiTaskImageClassifier(pl.LightningModule):
         count = 0
     
         for task_name in self.task_names:
-            metric = self.metrics[f"test_acc_{task_name}"]
-            acc = metric.compute()
-            
+            acc = self.trainer.callback_metrics.get(f"test/acc/{task_name}", torch.tensor(0.0))
             table.add_row(task_name, f"{acc:.4f}")
             total_acc += acc
             count += 1
-            metric.reset()
     
         avg_acc = total_acc / count if count > 0 else 0
         table.add_section()
