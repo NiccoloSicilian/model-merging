@@ -233,7 +233,7 @@ def run(cfg: DictConfig):
 
     # Save the trained encoder and full model
     pylogger.info("Saving trained model...")
-    save_dir = "/leonardo_scratch/large/userexternal/nsicilia/DualMerging/trained_from_scratch"
+    save_dir = PROJECT_ROOT
     os.makedirs(save_dir, exist_ok=True)
 
     # Save the full Lightning model
