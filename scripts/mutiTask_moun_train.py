@@ -1,6 +1,6 @@
 import logging
 import os
-from torch.utils.data import DataLoader, ConcatDataset, Dataset, random_split
+from torch.utils.data import DataLoader, ConcatDataset, Dataset, Subset
 import torch.distributed as dist
 from rich.console import Console
 from rich.table import Table
@@ -151,6 +151,7 @@ def run(cfg: DictConfig):
 
     classification_heads = nn.ModuleDict()
     train_datasets = []
+    val_datasets = []
     test_datasets = []
 
     for task_config in cfg.benchmark.datasets:
@@ -169,29 +170,33 @@ def run(cfg: DictConfig):
         verify_weights_are_random(head, f"Head_{task_name}")
         classification_heads[task_name] = head
 
-        task_dataset = instantiate(
+        task_dataset_train = instantiate(
             task_config,
             preprocess_fn=zeroshot_encoder.train_preprocess,
             batch_size=cfg.train.batch_size,
         )
-        task_dataset_test = instantiate(
+        task_dataset_val = instantiate(
             task_config,
             preprocess_fn=zeroshot_encoder.val_preprocess,
             batch_size=cfg.train.batch_size,
         )
-        train_datasets.append(TaskLabeledDataset(task_dataset.train_dataset, task_name))
-        test_datasets.append(TaskLabeledDataset(task_dataset_test.test_dataset, task_name))
+        train_datasets.append(TaskLabeledDataset(task_dataset_train.train_dataset, task_name))
+        val_datasets.append(TaskLabeledDataset(task_dataset_val.train_dataset, task_name))
+        test_datasets.append(TaskLabeledDataset(task_dataset_val.test_dataset, task_name))
 
-    num_workers = task_dataset.train_loader.num_workers
+    num_workers = task_dataset_train.train_loader.num_workers
 
-    # Merge all tasks into one dataset, split into train/val/test
+    # Merge all tasks — train and val are parallel (same indices, different transforms)
     full_train = ConcatDataset(train_datasets)
+    full_val   = ConcatDataset(val_datasets)
+    full_test  = ConcatDataset(test_datasets)
+
     val_size = int(0.1 * len(full_train))
-    train_split, val_split = random_split(
-        full_train, [len(full_train) - val_size, val_size],
-        generator=torch.Generator().manual_seed(42),
-    )
-    full_test = ConcatDataset(test_datasets)
+    train_indices = list(range(val_size, len(full_train)))
+    val_indices   = list(range(0, val_size))
+
+    train_split = Subset(full_train, train_indices)
+    val_split   = Subset(full_val,   val_indices)
 
     train_loader = DataLoader(train_split, batch_size=cfg.train.batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
     val_loader   = DataLoader(val_split,   batch_size=cfg.train.batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
