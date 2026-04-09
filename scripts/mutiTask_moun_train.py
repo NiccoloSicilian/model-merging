@@ -1,6 +1,6 @@
 import logging
 import os
-from torch.utils.data import DataLoader, ConcatDataset, Dataset, Subset
+from torch.utils.data import DataLoader, ConcatDataset, Dataset, Subset, WeightedRandomSampler
 import torch.distributed as dist
 from rich.console import Console
 from rich.table import Table
@@ -198,7 +198,15 @@ def run(cfg: DictConfig):
     train_split = Subset(full_train, train_indices)
     val_split   = Subset(full_val,   val_indices)
 
-    train_loader = DataLoader(train_split, batch_size=cfg.train.batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
+    # Balanced sampler: weight each sample by 1/task_size so all tasks contribute equally
+    task_sizes = [len(d) for d in train_datasets]
+    all_weights = []
+    for size in task_sizes:
+        all_weights.extend([1.0 / size] * size)
+    train_weights = [all_weights[i] for i in train_indices]
+    sampler = WeightedRandomSampler(train_weights, num_samples=len(train_indices), replacement=True)
+
+    train_loader = DataLoader(train_split, batch_size=cfg.train.batch_size, sampler=sampler, num_workers=num_workers, pin_memory=True)
     val_loader   = DataLoader(val_split,   batch_size=cfg.train.batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
     test_loader  = DataLoader(full_test,   batch_size=cfg.train.batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
 
