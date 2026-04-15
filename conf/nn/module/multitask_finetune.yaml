@@ -11,8 +11,8 @@ image_encoder: ??
 classification_heads: ??
 
 optimizer:
-  lr: 0.002         # Muon lr — 10x lower than from-scratch (preserve pretrained features)
-  adamw_lr: 3e-5    # AdamW lr — conservative for heads/biases/norms
+  lr: 0.001         # Muon lr — 20x lower than from-scratch (preserve pretrained features)
+  adamw_lr: 1e-5    # AdamW lr — standard CLIP finetuning range
   adamw_wd: 0.01
 
 lr_scheduler:

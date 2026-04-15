@@ -2,12 +2,15 @@ import logging
 import os
 from torch.utils.data import DataLoader, ConcatDataset, Dataset, Subset, WeightedRandomSampler
 import torch.distributed as dist
+import torch.nn.functional as F
 import hydra
 import omegaconf
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 from omegaconf import DictConfig
+from rich.console import Console
+from rich.table import Table
 from nn_core.callbacks import NNTemplateCore
 from nn_core.common import PROJECT_ROOT
 from nn_core.common.utils import seed_index_everything
@@ -114,6 +117,42 @@ def run(cfg: DictConfig):
     train_loader = DataLoader(train_split, batch_size=cfg.train.batch_size, sampler=sampler, num_workers=num_workers, pin_memory=True)
     val_loader   = DataLoader(val_split,   batch_size=cfg.train.batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
     test_loader  = DataLoader(full_test,   batch_size=cfg.train.batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
+
+    # ── Zeroshot baseline on test set ─────────────────────────────────────────
+    pylogger.info("Evaluating zeroshot baseline before finetuning...")
+    device = torch.device(cfg.device)
+    zeroshot_encoder.eval().to(device)
+
+    zeroshot_accs = {}
+    with torch.no_grad():
+        for task_name, head in classification_heads.items():
+            head_dev = head.to(device)
+            correct = total = 0
+            for batch in DataLoader(
+                next(d for d in test_datasets if d.task_name == task_name),
+                batch_size=cfg.train.batch_size,
+                shuffle=False,
+                num_workers=num_workers,
+                pin_memory=True,
+            ):
+                x, y, _ = batch
+                x, y = x.to(device), y.to(device)
+                logits = head_dev(zeroshot_encoder(x))
+                correct += (logits.argmax(dim=-1) == y).sum().item()
+                total   += y.size(0)
+            zeroshot_accs[task_name] = correct / total
+
+    console = Console()
+    tbl = Table(title="Zeroshot Baseline (before finetuning)", header_style="bold cyan")
+    tbl.add_column("Dataset", style="cyan", width=20)
+    tbl.add_column("Accuracy", justify="right", style="green")
+    for task_name, acc in zeroshot_accs.items():
+        tbl.add_row(task_name, f"{acc:.4f}")
+    tbl.add_section()
+    avg = sum(zeroshot_accs.values()) / len(zeroshot_accs)
+    tbl.add_row("AVERAGE", f"{avg:.4f}", style="bold yellow")
+    console.print(tbl)
+    # ──────────────────────────────────────────────────────────────────────────
 
     # Muon requires torch.distributed even on a single GPU
     if not dist.is_initialized():
