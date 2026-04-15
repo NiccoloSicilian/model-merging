@@ -63,7 +63,7 @@ def run(cfg: DictConfig):
     for task_config in cfg.benchmark.datasets:
         task_name = task_config.name
 
-        # Load pretrained zeroshot head — keep original weights, just unfreeze
+        # Load pretrained zeroshot head — freeze it (only encoder is finetuned)
         head = get_classification_head(
             cfg.nn.encoder.model_name,
             task_name,
@@ -72,7 +72,7 @@ def run(cfg: DictConfig):
             device=cfg.device,
         )
         for param in head.parameters():
-            param.requires_grad = True
+            param.requires_grad = False
         classification_heads[task_name] = head
 
         task_dataset_train = instantiate(
@@ -146,7 +146,7 @@ def run(cfg: DictConfig):
 
     # Save — naming: muon_mlt_ft_{epochs}ep
     epochs = cfg.train.trainer.max_epochs
-    save_dir = PROJECT_ROOT
+    save_dir = cfg.misc.output_dir
     os.makedirs(save_dir, exist_ok=True)
 
     trainer.save_checkpoint(os.path.join(save_dir, f"muon_mlt_ft_{epochs}ep.ckpt"))

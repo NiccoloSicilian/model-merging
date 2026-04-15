@@ -29,6 +29,7 @@ misc:
   pretrained_checkpoint: ${misc.ckpt_path}/zeroshot.pt
   openclip_cachedir: "${oc.env:PROJECT_ROOT}/checkpoints/openclip_cache"
   svd_path: ${oc.env:PROJECT_ROOT}/checkpoints
+  output_dir: ${oc.env:PROJECT_ROOT}/outputs  # override this on Kaggle: misc.output_dir=/kaggle/working
 
 dataset:
   ft_epochs: 5  # fewer epochs — pretrained weights converge faster
