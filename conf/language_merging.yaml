@@ -1,0 +1,36 @@
+core:
+  project_name: dual-merging-language
+  storage_dir: ${oc.env:PROJECT_ROOT}/storage
+  tags: []
+
+defaults:
+  - hydra: default
+  - benchmark: glue
+  - override hydra/launcher: basic
+  - _self_
+
+seed_index: 0
+device: cuda
+
+# ── Merger settings ──────────────────────────────────────────────────────────
+# Override from CLI: merger.method=tsv  or  merger.method=ta
+merger:
+  method: ta            # ta | tsv
+  ta_alpha: 1.0         # scaling factor for TA  (α in θ_pre + α·Στ)
+  svd_compress_factor:  # null → use num_tasks;  override e.g. svd_compress_factor=4
+
+# ── Model settings ───────────────────────────────────────────────────────────
+nn:
+  encoder:
+    model_name: t5-base
+    pretrained_model_id: google/flan-t5-base
+    finetuned_model_id: "tanganke/google/flan-t5-base_glue-{task}"
+    tokenizer_id: google/flan-t5-base
+
+# ── DataLoader ───────────────────────────────────────────────────────────────
+batch_size: 16
+
+# ── Paths ────────────────────────────────────────────────────────────────────
+misc:
+  finetuned_accuracy_path: "${oc.env:PROJECT_ROOT}/results/finetuning/flan-t5.json"
+  results_path: "${oc.env:PROJECT_ROOT}/results/${nn.encoder.model_name}/"

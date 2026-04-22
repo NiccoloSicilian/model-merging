@@ -1,0 +1,4 @@
+model_name: t5-base
+pretrained_model_id: google/flan-t5-base
+finetuned_model_id: "tanganke/google/flan-t5-base_glue-{task}"
+tokenizer_id: google/flan-t5-base
