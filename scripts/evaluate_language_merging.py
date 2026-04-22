@@ -222,7 +222,7 @@ def evaluate_on_glue(
     results = {}
 
     for task in tasks:
-        pylogger.info(f"  Evaluating {task}…")
+        print(f"\n[{task}] evaluating…")
         split = _get_validation_split(task)
 
         glue_ds = load_glue_dataset(
@@ -240,7 +240,8 @@ def evaluate_on_glue(
 
         tester.set_task(task)
         tester.set_metrics()
-        tester.set_finetuning_accuracy(finetuned_accuracies.get(task, 1.0))
+        ft_acc = finetuned_accuracies.get(task, 1.0)
+        tester.set_finetuning_accuracy(ft_acc)
 
         trainer = pl.Trainer(
             accelerator=accelerator,
@@ -255,6 +256,14 @@ def evaluate_on_glue(
             verbose=False,
         )
         results[task] = test_out
+
+        # Print per-task results immediately
+        acc_key  = f"acc/test/{task}"
+        norm_key = f"normalized_acc/test/{task}"
+        for m in test_out:
+            acc  = float(m[acc_key])  if acc_key  in m else float("nan")
+            norm = float(m[norm_key]) if norm_key in m else acc / ft_acc
+            print(f"  acc = {acc:.4f}  |  normalized_acc = {norm:.4f}  (finetuned = {ft_acc:.4f})")
 
     return results
 
@@ -344,17 +353,24 @@ def main(cfg: DictConfig) -> None:
     avg = compute_avg_accuracy(results)
     results["avg"] = [avg]
 
-    pylogger.info("=" * 60)
-    pylogger.info(f"Method: {method.upper()}  |  Tasks: {num_tasks}")
-    for task, metrics in results.items():
-        if task == "avg":
-            pylogger.info(f"  avg: {metrics[0]}")
-        else:
-            for m in metrics:
-                key = f"acc/test/{task}"
-                if key in m:
-                    pylogger.info(f"  {task}: {m[key]:.4f}")
-    pylogger.info("=" * 60)
+    # ── Final summary table ───────────────────────────────────────────────────
+    col = 22
+    print("\n" + "=" * 60)
+    print(f"  Method: {method.upper()}   Tasks: {num_tasks}")
+    print("=" * 60)
+    print(f"  {'Task':<{col}} {'Acc':>8}   {'Norm Acc':>10}   {'Finetuned':>10}")
+    print("  " + "-" * 56)
+    for task in tasks:
+        ft_acc = finetuned_accuracies.get(task, 1.0)
+        for m in results[task]:
+            acc  = float(m.get(f"acc/test/{task}",  float("nan")))
+            norm = float(m.get(f"normalized_acc/test/{task}", acc / ft_acc))
+            print(f"  {task:<{col}} {acc:>8.4f}   {norm:>10.4f}   {ft_acc:>10.4f}")
+    avg_acc  = float(avg.get("acc/test/avg", float("nan")))
+    avg_norm = float(avg.get("normalized_acc/test/avg", float("nan")))
+    print("  " + "-" * 56)
+    print(f"  {'avg':<{col}} {avg_acc:>8.4f}   {avg_norm:>10.4f}")
+    print("=" * 60)
 
     # ── 7. Save results ───────────────────────────────────────────────────────
     results_path = Path(cfg.misc.results_path)
@@ -362,7 +378,7 @@ def main(cfg: DictConfig) -> None:
     out_file = results_path / f"{method}_{num_tasks}.json"
     with open(out_file, "w") as f:
         json.dump(results, f, indent=4)
-    pylogger.info(f"Results saved → {out_file}")
+    print(f"\nResults saved → {out_file}")
 
 
 if __name__ == "__main__":
