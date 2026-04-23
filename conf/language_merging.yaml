@@ -6,18 +6,12 @@ core:
 defaults:
   - hydra: default
   - benchmark: glue
+  - merger: ta
   - override hydra/launcher: basic
   - _self_
 
 seed_index: 0
 device: cuda
-
-# ── Merger settings ──────────────────────────────────────────────────────────
-# Override from CLI: merger.method=tsv  or  merger.method=ta
-merger:
-  method: ta            # ta | tsv
-  ta_alpha: 1.0         # scaling factor for TA  (α in θ_pre + α·Στ)
-  svd_compress_factor:  # null → use num_tasks;  override e.g. svd_compress_factor=4
 
 # ── Model settings ───────────────────────────────────────────────────────────
 nn:
