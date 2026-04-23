@@ -17,11 +17,13 @@ import json
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional
+import torch
+
+torch.set_float32_matmul_precision("high")
 
 import hydra
 import omegaconf
 import pytorch_lightning as pl
-import torch
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
