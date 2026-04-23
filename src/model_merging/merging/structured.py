@@ -153,15 +153,17 @@ def aggregate_decomposed_task_vectors(
 
     for layer_name in tqdm(layer_names, desc="Summing SVD"):
         is_matrix = aggregated_model_dict[layer_name].dim() == 2
-        # TODO: modified
-        # new_key = layer_name.replace(".transformer", "")
         new_key = layer_name
         offset = 0
 
-        for i, dataset in enumerate(datasets):
+        if "text_projection" in layer_name:
+            continue
+        if "embed_tokens" in layer_name:
+            continue
+        if "lm_head" in layer_name:
+            continue
 
-            if "text_projection" in layer_name:
-                continue
+        for i, dataset in enumerate(datasets):
 
             if is_matrix:
 
@@ -210,8 +212,8 @@ def aggregate_decomposed_task_vectors(
                     aggregated_model_dict[layer_name] = torch.zeros_like(delta_layer)
 
         # aggregation step
-        # text_projection is ignored and vectors were already aggregated
-        if "text_projection" in layer_name or not is_matrix:
+        # skipped layers and vectors were already aggregated
+        if not is_matrix:
             continue
 
         u_u, s_u, v_u = torch.linalg.svd(sum_u, full_matrices=False)
