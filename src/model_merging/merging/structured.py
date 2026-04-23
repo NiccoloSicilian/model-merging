@@ -84,12 +84,19 @@ def isotropic_sum(ref_state_dict, svd_dict, device="cuda"):
     datasets = list(svd_dict.keys())
 
     for layer_name in tqdm(layer_names, desc="Summing SVD"):
-        is_matrix = aggregated_model_dict[layer_name].dim() == 2 
+        is_matrix = aggregated_model_dict[layer_name].dim() == 2
+
+        if "text_projection" in layer_name:
+            aggregated_model_dict[layer_name] = torch.zeros_like(aggregated_model_dict[layer_name])
+            continue
+        if "embed_tokens" in layer_name:
+            aggregated_model_dict[layer_name] = torch.zeros_like(aggregated_model_dict[layer_name])
+            continue
+        if "lm_head" in layer_name:
+            aggregated_model_dict[layer_name] = torch.zeros_like(aggregated_model_dict[layer_name])
+            continue
 
         for i, dataset in enumerate(datasets):
-
-            if "text_projection" in layer_name:
-                continue
 
             if is_matrix:
 
@@ -118,7 +125,7 @@ def isotropic_sum(ref_state_dict, svd_dict, device="cuda"):
                         delta_layer - aggregated_model_dict[layer_name]
                     ) / (i + 1)
 
-        if "text_projection" in layer_name or not is_matrix or "model.positional_embedding" in layer_name:
+        if not is_matrix or "model.positional_embedding" in layer_name:
             continue
 
         u, s, v = torch.linalg.svd(sum, full_matrices=False)
@@ -156,11 +163,8 @@ def aggregate_decomposed_task_vectors(
         new_key = layer_name
         offset = 0
 
-        if "text_projection" in layer_name:
-            continue
-        if "embed_tokens" in layer_name:
-            continue
-        if "lm_head" in layer_name:
+        if "text_projection" in layer_name or "embed_tokens" in layer_name or "lm_head" in layer_name:
+            aggregated_model_dict[layer_name] = torch.zeros_like(aggregated_model_dict[layer_name])
             continue
 
         for i, dataset in enumerate(datasets):
