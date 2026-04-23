@@ -374,7 +374,7 @@ def apply_dict_to_model(task_vector_dict, model, coefficient: float = 1.0):
         )  # Get model's state_dict (reference, not a copy)
 
         for key, value in task_vector_dict.items():
-            new_key = key.replace("encoder.", "")
+            new_key = key if key in new_state_dict else key.replace("encoder.", "")
             if new_key not in new_state_dict:
                 pylogger.warning(
                     f"Key {new_key} is present in the task vector but not in the model"
