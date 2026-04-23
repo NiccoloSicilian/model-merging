@@ -467,6 +467,12 @@ def compute_task_dict(pretrained, finetuned):
     new_state_dict = OrderedDict()
 
     for key in pretrained:
+        if "embed_tokens" in key:
+            pylogger.info(f"Skipping key {key}")
+            continue
+        if "lm_head" in key:
+            pylogger.info(f"Skipping key {key}")
+            continue
         if pretrained[key].dtype in [torch.int64, torch.uint8]:
             pylogger.info(f"Skipping key {key}")
             continue
