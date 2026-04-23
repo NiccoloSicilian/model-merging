@@ -5,19 +5,13 @@ import copy
 import logging
 from typing import Dict
 import torch
-from tqdm import tqdm
 from model_merging.merger.merger import TaskVectorBasedMerger
 from model_merging.model.encoder import ImageEncoder
 from model_merging.utils.utils import (
     apply_dict_to_model,
     compute_task_dict,
     save_module_vec_fast,
-)
-
-from model_merging.merging.structured import (
-    get_svd_dict,
-    isotropic_sum,
-
+    sum_task_dict,
 )
 pylogger = logging.getLogger(__name__)
 
@@ -59,39 +53,12 @@ class TaskArithmeticMerger(TaskVectorBasedMerger):
             if self.device.type == "cuda":
                 torch.cuda.empty_cache()
 
-        # 2. SVD-compress all task vectors
-        svd_dict = get_svd_dict(
-            task_dicts, datasets, self.svd_path, self.svd_compress_factor
-        )
-
-        # 3. Arithmetic sum over SVD-reconstructed task vectors
-        layer_names = list(base_state_dict.keys())
+        # 2. Sum task vectors directly
         cumulative_dict = {}
+        for task_dict in task_dicts.values():
+            cumulative_dict = sum_task_dict(cumulative_dict, task_dict)
 
-        for layer_name in tqdm(layer_names, desc="Summing SVD"):
-            if "text_projection" in layer_name:
-                continue
-
-            is_matrix = base_state_dict[layer_name].dim() == 2
-
-            for i, dataset in enumerate(datasets):
-                if is_matrix:
-                    delta_layer_svd = svd_dict[dataset][layer_name]
-                    u = delta_layer_svd["u"].to(self.device)
-                    s = delta_layer_svd["s"].to(self.device)
-                    v = delta_layer_svd["v"].to(self.device)
-                    delta = u @ torch.diag_embed(s) @ v
-                    if i == 0:
-                        cumulative_dict[layer_name] = torch.zeros_like(delta)
-                    cumulative_dict[layer_name] += delta
-                else:
-                    delta_layer = svd_dict[dataset][layer_name]["dim1"].to(self.device)
-                    if i == 0:
-                        cumulative_dict[layer_name] = delta_layer
-                    else:
-                        cumulative_dict[layer_name] += delta_layer
-
-        # 4. Apply summed task vector to base model
+        # 3. Apply summed task vector to base model
         merged_encoder = apply_dict_to_model(
             cumulative_dict, pretrained_model, coefficient=self.optimal_alpha
         )
