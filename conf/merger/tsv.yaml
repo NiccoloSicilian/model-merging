@@ -1,5 +1,6 @@
 
 _target_: model_merging.merger.tsv.TaskSingularVectorsMerger
+optimal_alpha: 1.0
 svd_path: null
-svd_compress_factor: null 
+svd_compress_factor: null
 non_matrix_params_aggregation: "mean" # "base_model"
