@@ -13,6 +13,8 @@ optimal_alphas:
     8: 1.50
     14: 1.30
     20: 1.00
+  t5-base:
+    8: 1.0
 
 svd_path: "${oc.env:MODELS_PATH}svd_dict_${nn.encoder.model_name}.pt"
 svd_compress_factor: 1 
