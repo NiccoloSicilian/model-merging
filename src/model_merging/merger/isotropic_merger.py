@@ -81,10 +81,12 @@ class IsotropicMerger(TaskVectorBasedMerger):
         multi_task_vector = isotropic_sum(
             ref_state_dict=ref_state_dict,
             svd_dict=svd_dict,
+            device=str(self.device),
         )
         #save_module_vec_fast(multi_task_vector, "matrixesISOC_"+self.model_name.replace("/", "-")+"task"+str(len(datasets))+".txt",path="/kaggle/working")
         model_name = self.model_name
         coefficient = 1.0 
+
 
         if (
             model_name in self.optimal_alphas
@@ -92,7 +94,7 @@ class IsotropicMerger(TaskVectorBasedMerger):
         ):
             coefficient = self.optimal_alphas[model_name][num_tasks]
         
-            
+        print("USING:", coefficient, "Model:",model_name)
         
         merged_encoder = copy.deepcopy(base_model)
 
