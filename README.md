@@ -58,6 +58,12 @@ This modular design makes it easy to experiment with new algorithms for combinin
 
 ### 3. Reproducibility
 
+Use the following command to install the correct modula package directly from GitHub:
+
+```bash 
+uv pip install git+https://github.com/modula-systems/modula.
+```
+
 Results can also be reproduced and explored interactively using the notebooks provided in the `notebooks/` directory.
 
 ## License

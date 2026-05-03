@@ -1,11 +1,21 @@
 import torch
 from math import sqrt
-from modula.abstract import *
+
+try:
+    from modula.abstract import Atom
+except Exception as exc:
+    raise ImportError(
+        "modula.abstract.Atom is required for dual arithmetic. "
+        "Check that the correct 'modula' package is installed and on PYTHONPATH."
+    ) from exc
+
 from modula.bond import *
+
 
 def svd_orthogonalize(M):
     U, _, Vh = torch.linalg.svd(M, full_matrices=False)
     return U @ Vh
+
 
 class LinearSVD(Atom):
     def __init__(self, fanout, fanin):
@@ -39,13 +49,11 @@ class LinearSVD(Atom):
             )
         # 1. Calculate the scalar factor
         scalar_factor = sqrt(self.fanout / self.fanin) * target_norm
-        
+
         # 2. Compute the dual weight
         # svd_orthogonalize returns the "direction", scalar_factor applies the "magnitude"
         d_weight = svd_orthogonalize(grad) * scalar_factor
-        
-    
-        
+
         return [d_weight]
 
 
@@ -61,18 +69,18 @@ class Conv2DSVD(Atom):
 
     def forward(self, x, w):
         weights = w[0]  # [fanout, fanin, k, k]
-        return torch.nn.functional.conv2d(x, weights, padding='same')
+        return torch.nn.functional.conv2d(x, weights, padding="same")
 
     def initialize(self, key=None):
         weight = torch.randn(self.fanout, self.fanin, self.kernel_size, self.kernel_size)
         weight = self._ortho_spatial(weight)
-        scale = (1.0 / self.kernel_size ** 2) * sqrt(self.fanout / self.fanin)
+        scale = (1.0 / self.kernel_size**2) * sqrt(self.fanout / self.fanin)
         return [weight * scale]
 
     def project(self, w):
         weight = w[0]
         weight = self._ortho_spatial(weight)
-        scale = (1.0 / self.kernel_size ** 2) * sqrt(self.fanout / self.fanin)
+        scale = (1.0 / self.kernel_size**2) * sqrt(self.fanout / self.fanin)
         return [weight * scale]
 
     def dualize(self, grad_w, target_norm=1.0):
@@ -85,14 +93,14 @@ class Conv2DSVD(Atom):
             )
         # 1. Calculate the scalar factor
         # The paper defines this specifically for Conv2D to normalize spatial dimensions
-        scalar_factor = (1.0 / self.kernel_size ** 2) * sqrt(self.fanout / self.fanin) * target_norm
-        
+        scalar_factor = (1.0 / self.kernel_size**2) * sqrt(self.fanout / self.fanin) * target_norm
+
         # 2. Compute the dual weight
         d_weight_ortho = self._ortho_spatial(grad)
         d_weight = d_weight_ortho * scalar_factor
-        
+
         # 3. Print Debug Info
-        
+
         return [d_weight]
 
     def _ortho_spatial(self, weight):
@@ -104,15 +112,28 @@ class Conv2DSVD(Atom):
             for j in range(k):
                 result[:, :, i, j] = svd_orthogonalize(weight[:, :, i, j])
         return result
+
+
 def linear_mass_schedule(current_l, tot_layer):
-    return 0.01 + current_l/tot_layer * (0.5-0.01)    
+    return 0.01 + current_l / tot_layer * (0.5 - 0.01)
+
+
 def uniform_mass_schedule(current_l, tot_layer):
     return 0.5
 
-def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_size=16, input_channels=3, mass_schedule='uniform'):
+
+def ViT_B_16(
+    num_classes=512,
+    num_blocks=12,
+    d_embed=768,
+    num_heads=12,
+    patch_size=16,
+    input_channels=3,
+    mass_schedule="uniform",
+):
     mlp_width = 4 * d_embed
-    patch_dim = input_channels * (patch_size ** 2)
-    tot_layers= 4*num_blocks+3
+    patch_dim = input_channels * (patch_size**2)
+    tot_layers = 4 * num_blocks + 3
     # 1. Patch Embed (conv1 in checkpoint)
     # Note: Checkpoint shows [768, 3, 16, 16] which is a Conv layer
     mass_sched = uniform_mass_schedule
@@ -123,50 +144,60 @@ def ViT_B_16(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
     else:
         print("Unkown mass schedule")
         return None
-    conv1 = Conv2DSVD(fanin=input_channels, fanout=d_embed,kernel_size=patch_size)
-    conv1.mass = mass_sched(0,tot_layers)
+    conv1 = Conv2DSVD(fanin=input_channels, fanout=d_embed, kernel_size=patch_size)
+    conv1.mass = mass_sched(0, tot_layers)
     # 2. Positional & Class Embedding
     visual_pos_embed = LinearSVD(197, d_embed)
-    visual_pos_embed.mass = mass_sched(1,tot_layers)
-    
+    visual_pos_embed.mass = mass_sched(1, tot_layers)
+
     transformer = None
     # Pre-transformer norm (ln_pre)
     for b in range(num_blocks):
         # 3. Transformer Blocks
-        a1 = LinearSVD(3*d_embed, d_embed) 
-        a1.mass = mass_sched(b*4+2,tot_layers)
-        
-        a2 = LinearSVD(d_embed, d_embed) 
-        a2.mass = mass_sched(b*4+3,tot_layers)
-        
-        att = a2@ a1
-    
-        m1 = LinearSVD(mlp_width,d_embed)
-        m1.mass = mass_sched(b*4+4,tot_layers)
-        
-        m2 = LinearSVD( d_embed,mlp_width)
-        m2.mass = mass_sched(b*4+5,tot_layers)
-        
+        a1 = LinearSVD(3 * d_embed, d_embed)
+        a1.mass = mass_sched(b * 4 + 2, tot_layers)
+
+        a2 = LinearSVD(d_embed, d_embed)
+        a2.mass = mass_sched(b * 4 + 3, tot_layers)
+
+        att = a2 @ a1
+
+        m1 = LinearSVD(mlp_width, d_embed)
+        m1.mass = mass_sched(b * 4 + 4, tot_layers)
+
+        m2 = LinearSVD(d_embed, mlp_width)
+        m2.mass = mass_sched(b * 4 + 5, tot_layers)
+
         mlp = m2 @ m1
-        
+
         # Residual paths
         if transformer:
             transformer = (mlp @ att) @ transformer
         else:
-            transformer = (mlp @ att)
+            transformer = mlp @ att
 
     # 4. Final Head (ln_post and proj)
     proj = LinearSVD(d_embed, num_classes)
-    proj.mass = mass_sched(tot_layers,tot_layers)
-    
+    proj.mass = mass_sched(tot_layers, tot_layers)
+
     # Correct Flow: Input -> Patch -> Pos -> ln_pre -> Transformer -> ln_post -> Head
-    return proj @ transformer  @ visual_pos_embed @ conv1
+    return proj @ transformer @ visual_pos_embed @ conv1
+
+
 ###
-def ViT_B_32(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_size=32, input_channels=3, mass_schedule='uniform'):
+def ViT_B_32(
+    num_classes=512,
+    num_blocks=12,
+    d_embed=768,
+    num_heads=12,
+    patch_size=32,
+    input_channels=3,
+    mass_schedule="uniform",
+):
     mlp_width = 4 * d_embed
-    patch_dim = input_channels * (patch_size ** 2)
+    patch_dim = input_channels * (patch_size**2)
     tot_layers = 4 * num_blocks + 3
-    
+
     mass_sched = uniform_mass_schedule
     if mass_schedule == "linear":
         mass_sched = linear_mass_schedule
@@ -206,18 +237,28 @@ def ViT_B_32(num_classes=512, num_blocks=12, d_embed=768, num_heads=12, patch_si
         if transformer:
             transformer = (mlp @ att) @ transformer
         else:
-            transformer = (mlp @ att)
+            transformer = mlp @ att
 
     # 3. Final projection head
     proj = LinearSVD(d_embed, num_classes)
     proj.mass = mass_sched(tot_layers, tot_layers)
 
     return proj @ transformer @ visual_pos_embed @ conv1
-def ViT_L_14(num_classes=768, num_blocks=24, d_embed=1024, num_heads=16, patch_size=14, input_channels=3, mass_schedule='uniform'):
+
+
+def ViT_L_14(
+    num_classes=768,
+    num_blocks=24,
+    d_embed=1024,
+    num_heads=16,
+    patch_size=14,
+    input_channels=3,
+    mass_schedule="uniform",
+):
     mlp_width = 4 * d_embed
-    patch_dim = input_channels * (patch_size ** 2)
+    patch_dim = input_channels * (patch_size**2)
     tot_layers = 4 * num_blocks + 3
-    
+
     mass_sched = uniform_mass_schedule
     if mass_schedule == "linear":
         mass_sched = linear_mass_schedule
@@ -233,7 +274,7 @@ def ViT_L_14(num_classes=768, num_blocks=24, d_embed=1024, num_heads=16, patch_s
 
     # 2. Positional & Class Embedding
     # ViT-L/14 on 224x224: (224/14)^2 + 1 = 16^2 + 1 = 256 + 1 = 257 tokens
-    # Note: If you are using 336x336 images (like CLIP ViT-L/14@336px), 
+    # Note: If you are using 336x336 images (like CLIP ViT-L/14@336px),
     # this would be (336/14)^2 + 1 = 577 tokens.
     visual_pos_embed = LinearSVD(257, d_embed)
     visual_pos_embed.mass = mass_sched(1, tot_layers)
@@ -259,21 +300,23 @@ def ViT_L_14(num_classes=768, num_blocks=24, d_embed=1024, num_heads=16, patch_s
         if transformer:
             transformer = (mlp @ att) @ transformer
         else:
-            transformer = (mlp @ att)
+            transformer = mlp @ att
 
     # 3. Final projection head
     proj = LinearSVD(d_embed, num_classes)
     proj.mass = mass_sched(tot_layers, tot_layers)
 
     return proj @ transformer @ visual_pos_embed @ conv1
-def build_duality_map(layer_names, grads,  device,mass_schedule, model_name):
+
+
+def build_duality_map(layer_names, grads, device, mass_schedule, model_name):
     """
     Build modular duality map assuming layers are in execution order.
     Applies composition sequentially: layer_N ∘ ... ∘ layer_1 ∘ layer_0
     """
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("STEP 1: Creating Atomic Modules with Dualized Gradients")
-    print("="*80)
+    print("=" * 80)
     m = None
     if "B-16" in model_name:
         m = ViT_B_16(mass_schedule=mass_schedule)
@@ -286,16 +329,32 @@ def build_duality_map(layer_names, grads,  device,mass_schedule, model_name):
     to_consider_name = []
     to_consider_grad = []
     for name in layer_names:
-        if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
+        if any(skip in name for skip in ["bias", "ln_", "class_embedding", "logit_scale"]):
             continue
-        if 'visual.conv1.weight' in name or ('visual.proj' in name and 'out_proj' not in name) or 'visual.positional_embedding' in name or ('visual.transformer.resblocks' in name and 'weight' in name and ('attn.in_proj_weight' in name or 'attn.out_proj.weight' in name or 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight' in name)):
+        if (
+            "visual.conv1.weight" in name
+            or ("visual.proj" in name and "out_proj" not in name)
+            or "visual.positional_embedding" in name
+            or (
+                "visual.transformer.resblocks" in name
+                and "weight" in name
+                and (
+                    "attn.in_proj_weight" in name
+                    or "attn.out_proj.weight" in name
+                    or "mlp.c_fc.weight" in name
+                    or "mlp.c_proj.weight" in name
+                )
+            )
+        ):
             to_consider_name.append(name)
             to_consider_grad.append(grads[name].to(device))
         else:
             print(f"⚠ {name}: Ignored")
             continue
     # Print first 100 values of the gradient just appended
-    print(f"Total Atomic Modules: {m.atoms} {m.mass}, To Consider: {len(to_consider_grad)}, {len(to_consider_name)}")
+    print(
+        f"Total Atomic Modules: {m.atoms} {m.mass}, To Consider: {len(to_consider_grad)}, {len(to_consider_name)}"
+    )
     # Dualize directly in PyTorch — no JAX conversion needed
     to_consider_dualized_grad = m.dualize(to_consider_grad)
     print(f"Dualized: {len(to_consider_dualized_grad)}")

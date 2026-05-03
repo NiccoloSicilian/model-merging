@@ -230,3 +230,6 @@ wandb/**
 storage/**
 models/** 
 **/models/**
+logs/*
+openclip_cache/*
+ViT-B-32/*

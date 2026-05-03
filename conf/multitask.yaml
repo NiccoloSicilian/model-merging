@@ -1,7 +1,7 @@
 core:
   project_name: dual-merging
   storage_dir: ${oc.env:PROJECT_ROOT}/storage
-  entity: siciliano-1958541
+  entity: gladia
   version: 0.0.1
   tags: 
   - dev
@@ -11,7 +11,7 @@ defaults:
   - nn: default
   - train: default
   - merger: dual # consensus
-  - benchmark: N14 #, N8
+  - benchmark: N8
   - override hydra/launcher: basic # basic
   - override hydra/job_logging: none
   - override hydra/hydra_logging: none

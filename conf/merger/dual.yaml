@@ -22,3 +22,4 @@ device: ${device}
 aggregation_mode: "avg"
 mass_schedule: "uniform"
 model_name: ${nn.encoder.model_name}
+dualize_pretrained: false

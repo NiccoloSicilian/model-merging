@@ -18,6 +18,7 @@ from hydra.utils import instantiate
 from lightning.pytorch import Callback
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from torch.nn.utils import parameters_to_vector, vector_to_parameters
+from dotenv import load_dotenv
 
 from nn_core.callbacks import NNTemplateCore
 from nn_core.common import PROJECT_ROOT
@@ -46,6 +47,8 @@ import json
 import os
 
 pylogger = logging.getLogger(__name__)
+
+load_dotenv()
 
 torch.set_float32_matmul_precision("high")
 
@@ -86,8 +89,8 @@ def run(cfg: DictConfig) -> str:
     """
 
     seed_index_everything(cfg)
-    print("MERGERERERE: ",cfg.merger)
-    
+    print("MERGERERERE: ", cfg.merger)
+
     logger, template_core = boilerplate(cfg)
 
     num_tasks = len(cfg.benchmark.datasets)
@@ -103,9 +106,7 @@ def run(cfg: DictConfig) -> str:
     )[cfg.nn.encoder.model_name]
 
     # only has vision encoder, no text transformer
-    zeroshot_encoder: ImageEncoder = load_model_from_hf(
-        model_name=cfg.nn.encoder.model_name
-    )
+    zeroshot_encoder: ImageEncoder = load_model_from_hf(model_name=cfg.nn.encoder.model_name)
 
     finetuned_models = {
         dataset: load_model_from_hf(
@@ -126,9 +127,7 @@ def run(cfg: DictConfig) -> str:
     print_memory("before eval")
     for dataset_cfg in cfg.benchmark.datasets:
 
-        dataset = instantiate(
-            dataset_cfg, preprocess_fn=zeroshot_encoder.val_preprocess
-        )
+        dataset = instantiate(dataset_cfg, preprocess_fn=zeroshot_encoder.val_preprocess)
 
         classification_head = get_classification_head(
             cfg.nn.encoder.model_name,
@@ -159,9 +158,7 @@ def run(cfg: DictConfig) -> str:
             plugins=[NNCheckpointIO(jailing_dir=logger.run_dir)],
             logger=logger,
             callbacks=callbacks,
-            limit_test_batches=(
-                cfg.number_of_train_batches if cfg.eval_on_train else None
-            ),
+            limit_test_batches=(cfg.number_of_train_batches if cfg.eval_on_train else None),
             **cfg.train.trainer,
         )
 
@@ -177,9 +174,7 @@ def run(cfg: DictConfig) -> str:
         results[dataset_cfg.name] = test_results
 
     avg = compute_avg_accuracy(results)
-    results["avg"] = [
-        avg
-    ]  # as a list for consistency due to lightning logging stuff this way
+    results["avg"] = [avg]  # as a list for consistency due to lightning logging stuff this way
 
     logger.experiment.log(avg)
 

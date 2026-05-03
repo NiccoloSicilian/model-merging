@@ -106,6 +106,8 @@ dependencies = [
     "Jinja2==3.1.2",
     "jmespath==1.0.1",
     "joblib==1.4.2",
+    "jax==0.4.28",
+    "jaxlib==0.4.28",
     "jsonschema==4.21.1",
     "jsonschema-specifications==2023.12.1",
     "kiwisolver==1.4.5",
@@ -145,6 +147,7 @@ dependencies = [
     "prompt-toolkit==3.0.43",
     "protobuf==4.25.3",
     "psutil==6.1.1",
+    "python-dotenv==1.0.1",
     "pytorch-lightning==2.0.0",
     "pytorch-lightning-bolts==0.3.2.post1",
     "pytz==2024.1",
@@ -168,6 +171,7 @@ dependencies = [
     "websockets==11.0.3",
     "mplcursors>=0.6",
     "nbformat>=5.10.4",
+    "modula>=0.0.0.0.0.2",
 ]
 
 
