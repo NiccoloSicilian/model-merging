@@ -1,6 +1,7 @@
 seed_index: 0
 deterministic: False
 batch_size: 128 # 128 for B-32, B-16 and 64 for L-14
+gradient_save_dir: ${core.storage_dir}/gradient_checkpoints/${dataset.name}
 
 trainer:
   max_epochs: ${dataset.ft_epochs} 
@@ -33,7 +34,7 @@ callbacks:
     refresh_rate: 20
 
   - _target_: model_merging.callbacks.step_checkpoint.StepCheckpointCallback
-    save_dir: ${core.storage_dir}/gradient_checkpoints/${dataset.name}
+    save_dir: ${train.gradient_save_dir}
 
 logging:
   upload:
