@@ -52,7 +52,8 @@ def run(cfg: DictConfig):
     )
 
     zeroshot_encoder: ImageEncoder = load_model_from_hf(
-        model_name=cfg.nn.encoder.model_name
+        model_name=cfg.nn.encoder.model_name,
+        openclip_cachedir=cfg.misc.openclip_cachedir,
     )
 
     model: ImageClassifier = hydra.utils.instantiate(
