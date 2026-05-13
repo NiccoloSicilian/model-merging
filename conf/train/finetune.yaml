@@ -32,6 +32,9 @@ callbacks:
   - _target_: pytorch_lightning.callbacks.progress.tqdm_progress.TQDMProgressBar
     refresh_rate: 20
 
+  - _target_: model_merging.callbacks.step_checkpoint.StepCheckpointCallback
+    save_dir: ${core.storage_dir}/gradient_checkpoints/${dataset.name}
+
 logging:
   upload:
     run_files: true
