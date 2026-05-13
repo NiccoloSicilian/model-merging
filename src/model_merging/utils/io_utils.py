@@ -79,14 +79,14 @@ def load_model_from_disk(model_path, model_name=None) -> ImageEncoder:
     return loaded
 
 
-def load_model_from_hf(model_name, dataset_name="base") -> ImageEncoder:
+def load_model_from_hf(model_name, dataset_name="base", openclip_cachedir=None) -> ImageEncoder:
 
     model_path = f"crisostomi/{model_name}-{dataset_name}"
 
     ckpt_path = hf_hub_download(repo_id=model_path, filename="pytorch_model.bin")
     state_dict = torch.load(ckpt_path, map_location="cpu")
 
-    model = ImageEncoder(model_name)
+    model = ImageEncoder(model_name, openclip_cachedir=openclip_cachedir)
     model.load_state_dict(state_dict)
     return model
 
