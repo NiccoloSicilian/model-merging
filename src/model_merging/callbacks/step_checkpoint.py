@@ -36,7 +36,7 @@ class StepCheckpointCallback(pl.Callback):
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
         global_step = trainer.global_step
         optimizer = trainer.optimizers[0]
-
+        print("Saving checkpoints")
         # Collect gradients and optimizer state per encoder parameter
         gradients = {}
         exp_avg = {}
