@@ -73,10 +73,13 @@ def run(cfg: DictConfig):
 
     model.freeze_head()
 
+    callbacks = [hydra.utils.instantiate(cb) for cb in cfg.train.callbacks]
+
     pylogger.info("Instantiating the <Trainer>")
     trainer = pl.Trainer(
         default_root_dir=cfg.core.storage_dir,
         logger=logger,
+        callbacks=callbacks,
         enable_checkpointing=False,
         **cfg.train.trainer,
     )
