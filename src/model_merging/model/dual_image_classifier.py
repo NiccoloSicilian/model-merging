@@ -37,7 +37,7 @@ class DualImageClassifier(ImageClassifier):
             grads=grads,
             device=self.device,
             mass_schedule=self.mass_schedule,
-            model_name=model_name,
+            model_name='B-16',
         )
 
         # Replace gradients with dualized versions
