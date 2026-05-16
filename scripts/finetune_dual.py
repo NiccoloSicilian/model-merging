@@ -101,7 +101,7 @@ def run(cfg: DictConfig):
         logger.experiment.finish()
 
 
-@hydra.main(config_path=str(PROJECT_ROOT / "conf"), config_name="finetune_dual.yaml")
+@hydra.main(config_path=str(PROJECT_ROOT / "conf"), config_name="finetune_dual")
 def main(cfg: omegaconf.DictConfig):
     run(cfg)
 
