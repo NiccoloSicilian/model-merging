@@ -4,11 +4,35 @@ import hydra
 import torch
 
 from model_merging.model.image_classifier import ImageClassifier
-from model_merging.merging.dual_arithmetic import build_duality_map
+from model_merging.merging.dual_arithmetic import build_duality_map, ViT_B_16, ViT_B_32, ViT_L_14
 import re
 pylogger = logging.getLogger(__name__)
 
 
+def build_duality_map_with_module(layer_names, grads,  device,mass_schedule, model_name, m):
+    """
+    Build modular duality map assuming layers are in execution order.
+    Applies composition sequentially: layer_N ∘ ... ∘ layer_1 ∘ layer_0
+    """
+    
+    to_consider_name = []
+    to_consider_grad = []
+    for name in layer_names:
+        if any(skip in name for skip in ['bias', 'ln_', 'class_embedding', 'logit_scale']):
+            continue
+        if 'visual.conv1.weight' in name or ('visual.proj' in name and 'out_proj' not in name) or 'visual.positional_embedding' in name or ('visual.transformer.resblocks' in name and 'weight' in name and ('attn.in_proj_weight' in name or 'attn.out_proj.weight' in name or 'mlp.c_fc.weight' in name or 'mlp.c_proj.weight' in name)):
+            to_consider_name.append(name)
+            to_consider_grad.append(grads[name].to(device))
+        else:
+            print(f"⚠ {name}: Ignored")
+            continue
+    # Print first 100 values of the gradient just appended
+    print(f"Total Atomic Modules: {m.atoms} {m.mass}, To Consider: {len(to_consider_grad)}, {len(to_consider_name)}")
+    # Dualize directly in PyTorch — no JAX conversion needed
+    to_consider_dualized_grad = m.dualize(to_consider_grad)
+    print(f"Dualized: {len(to_consider_dualized_grad)}")
+    # Return the dictionary of all dualized gradients
+    return dict(zip(to_consider_name, to_consider_dualized_grad))
 
 def get_vit_topological_order(keys):
     """
@@ -63,6 +87,7 @@ class DualImageClassifier(ImageClassifier):
     def __init__(self, encoder, classifier, mass_schedule="uniform", **kwargs):
         super().__init__(encoder=encoder, classifier=classifier, **kwargs)
         self.mass_schedule = mass_schedule
+        self._duality_module = ViT_B_16(mass_schedule=mass_schedule)
 
     def on_before_optimizer_step(self, optimizer):
         # Collect gradients from encoder parameters
@@ -76,17 +101,15 @@ class DualImageClassifier(ImageClassifier):
         if not layer_names:
             return
 
-        # Extract model name from encoder
-        model_name = self.encoder.model_name if hasattr(self.encoder, "model_name") else ""
         layer_names = get_vit_topological_order(layer_names)
-        print(layer_names)
         # Apply duality map
-        dualized_grads = build_duality_map(
+        dualized_grads = build_duality_map_with_module(
             layer_names=layer_names,
             grads=grads,
             device=self.device,
             mass_schedule=self.mass_schedule,
             model_name='B-16',
+            m=self._duality_module
         )
 
         # Replace gradients with dualized versions
