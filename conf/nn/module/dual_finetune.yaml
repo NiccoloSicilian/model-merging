@@ -1,0 +1,21 @@
+
+defaults:
+  - _self_
+
+_target_: model_merging.model.dual_image_classifier.DualImageClassifier
+x_key: ${conventions.x_key}
+y_key: ${conventions.y_key}
+dataset_names: {eval_dataset}
+
+image_encoder: ??
+classification_heads: ??
+mass_schedule: uniform
+
+optimizer:
+  _target_: torch.optim.AdamW
+  lr: 1e-5
+  weight_decay: 0.1
+
+lr_scheduler:
+  _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+  T_max: 10
