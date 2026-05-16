@@ -16,8 +16,6 @@ defaults:
   - override hydra/launcher: basic
   - _self_ # as last argument to allow the override of parameters via this main config
 
-train:
-  gradient_save_dir: ${core.storage_dir}/gradient_checkpoints/dual_${dataset.name}
 
 seed_index: 0
 device: cuda
