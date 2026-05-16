@@ -21,7 +21,7 @@ def get_vit_topological_order(keys):
             return (0, 0, 0)
         
         # 2. Positional Embeddings
-        if 'positional_embedding' in k and 'vision' in k: 
+        if 'positional_embedding' in k and 'visual' in k:
             return (1, 0, 0)
             
         # 3. Class Embedding (if present)
