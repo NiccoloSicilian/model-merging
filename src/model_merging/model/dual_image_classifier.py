@@ -30,7 +30,7 @@ class DualImageClassifier(ImageClassifier):
 
         # Extract model name from encoder
         model_name = self.encoder.model_name if hasattr(self.encoder, "model_name") else ""
-	print(layer_names)
+        print(layer_names)
         # Apply duality map
         dualized_grads = build_duality_map(
             layer_names=layer_names,
