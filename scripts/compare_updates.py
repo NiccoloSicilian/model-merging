@@ -60,6 +60,8 @@ def main():
     dual_files = get_step_files(args.dual_dir)
     adamw_files = get_step_files(args.adamw_dir)
 
+    print(f"Found {len(dual_files)} dual files, {len(adamw_files)} adamw files", flush=True)
+
     assert len(dual_files) == len(adamw_files), (
         f"Mismatch: {len(dual_files)} dual files vs {len(adamw_files)} adamw files"
     )
@@ -98,7 +100,7 @@ def main():
                 layer_norms[name] = torch.norm(diff, p="fro").item()
 
         results.append((step_d, layer_norms))
-        print(f"step {step_d}: {len(layer_norms)} layers compared")
+        print(f"step {step_d}: {len(layer_norms)} layers compared", flush=True)
 
     with open(args.output, "w") as f:
         # Header
