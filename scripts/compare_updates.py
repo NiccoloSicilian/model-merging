@@ -19,6 +19,7 @@ import re
 import torch
 
 from model_merging.merging.dual_arithmetic import ViT_B_16, ViT_B_32, ViT_L_14
+from model_merging.merging.structured import compute_svd_and_compress
 from model_merging.utils.io_utils import load_model_from_hf
 from model_merging.utils.utils import compute_task_dict
 
@@ -37,6 +38,22 @@ def get_step_files(directory):
         if match:
             files.append((int(match.group(1)), os.path.join(directory, f)))
     return sorted(files, key=lambda x: x[0])
+
+
+def low_rank_approx(task_dict, compress_ratio=None):
+    """Replace each 2D tensor in task_dict with its low-rank SVD approximation.
+    If compress_ratio is None, keep full rank (all singular values)."""
+    out = {}
+    for name, tensor in task_dict.items():
+        if tensor.ndim == 2:
+            if compress_ratio is not None:
+                u, s, v = compute_svd_and_compress(tensor, compress_ratio)
+            else:
+                u, s, v = torch.linalg.svd(tensor, full_matrices=False)
+            out[name] = u @ torch.diag(s) @ v
+        else:
+            out[name] = tensor
+    return out
 
 
 def build_module(model_name, mass_schedule):
@@ -60,6 +77,7 @@ def main():
     parser.add_argument("--mass_schedule", default="uniform", choices=["uniform", "linear"])
     parser.add_argument("--model", default="B-16", choices=["B-16", "B-32", "L-14"])
     parser.add_argument("--device", default="cuda")
+    parser.add_argument("--compress_ratio", type=float, default=None, help="Fraction of singular values to retain for low-rank approximation. If not set, no low-rank projection is applied.")
     args = parser.parse_args()
 
     dual_files = get_step_files(args.dual_dir)
@@ -101,6 +119,11 @@ def main():
         # Compute task vectors: step_i_weights - pretrained
         tau_dual = compute_task_dict(pretrained, dual_weights)
         tau_adamw = compute_task_dict(pretrained, adamw_weights)
+
+        if args.compress_ratio is not None:
+            # Low-rank of adam update is performed before dualization
+            tau_adamw = low_rank_approx(tau_adamw, args.compress_ratio)
+            tau_dual = low_rank_approx(tau_dual, args.compress_ratio)
 
         # Apply duality map to adamw task vector
         layer_names = get_vit_topological_order(list(tau_adamw.keys()))
