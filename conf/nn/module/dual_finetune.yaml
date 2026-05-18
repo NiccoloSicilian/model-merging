@@ -10,11 +10,12 @@ dataset_names: {eval_dataset}
 image_encoder: ??
 classification_heads: ??
 mass_schedule: uniform
+dual_optimizer_type: adam  # "adam" or "sgd"
 
 optimizer:
-  _target_: torch.optim.AdamW
   lr: 1e-5
   weight_decay: 0.1
+  momentum: 0.9
 
 lr_scheduler:
   _target_: torch.optim.lr_scheduler.CosineAnnealingLR

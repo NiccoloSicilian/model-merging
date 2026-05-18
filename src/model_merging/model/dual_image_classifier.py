@@ -84,9 +84,10 @@ def get_vit_topological_order(keys):
 class DualImageClassifier(ImageClassifier):
     """ImageClassifier that applies the duality map on gradients before the optimizer step."""
 
-    def __init__(self, encoder, classifier, mass_schedule="uniform", **kwargs):
+    def __init__(self, encoder, classifier, mass_schedule="uniform", dual_optimizer_type="adam", **kwargs):
         super().__init__(encoder=encoder, classifier=classifier, **kwargs)
         self.mass_schedule = mass_schedule
+        self.dual_optimizer_type = dual_optimizer_type.lower()
         self._duality_module = ViT_B_16(mass_schedule=mass_schedule)
 
     def on_before_optimizer_step(self, optimizer):
@@ -116,3 +117,24 @@ class DualImageClassifier(ImageClassifier):
         for name, param in self.encoder.named_parameters():
             if name in dualized_grads:
                 param.grad.copy_(dualized_grads[name])
+
+    def configure_optimizers(self):
+        if self.dual_optimizer_type == "sgd":
+            opt = torch.optim.SGD(
+                self.parameters(),
+                lr=self.hparams.optimizer.get("lr", 1e-5),
+                momentum=self.hparams.optimizer.get("momentum", 0.9),
+            )
+        elif self.dual_optimizer_type == "adam":
+            opt = torch.optim.AdamW(
+                self.parameters(),
+                lr=self.hparams.optimizer.get("lr", 1e-5),
+                weight_decay=self.hparams.optimizer.get("weight_decay", 0.1),
+            )
+        else:
+            raise ValueError(f"Unknown dual_optimizer_type: {self.dual_optimizer_type}. Use 'adam' or 'sgd'.")
+
+        if "lr_scheduler" not in self.hparams:
+            return [opt]
+        scheduler = hydra.utils.instantiate(self.hparams.lr_scheduler, optimizer=opt)
+        return [opt], [scheduler]
