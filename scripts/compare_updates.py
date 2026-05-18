@@ -89,6 +89,10 @@ def main():
         f"Mismatch: {len(dual_files)} dual files vs {len(adamw_files)} adamw files"
     )
 
+    # Process from last step first
+    dual_files = list(reversed(dual_files))
+    adamw_files = list(reversed(adamw_files))
+
     print(f"Loading pretrained encoder ({args.model_name})...", flush=True)
     pretrained_encoder = load_model_from_hf(model_name=args.model_name, openclip_cachedir=args.openclip_cachedir)
     pretrained = {
