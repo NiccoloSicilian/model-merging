@@ -121,7 +121,7 @@ def main():
         tau_adamw = compute_task_dict(pretrained, adamw_weights)
 
         if args.compress_ratio is not None:
-            # Low-rank of adam update is performed before dualization
+            print(f"  Applying low-rank approximation (compress_ratio={args.compress_ratio})", flush=True)
             tau_adamw = low_rank_approx(tau_adamw, args.compress_ratio)
             tau_dual = low_rank_approx(tau_dual, args.compress_ratio)
 
