@@ -1,5 +1,5 @@
 seed_index: 0
-deterministic: False
+deterministic: True
 batch_size: 128 # 128 for B-32, B-16 and 64 for L-14
 gradient_save_dir: ${core.storage_dir}/gradient_checkpoints/${dataset.name}
 
@@ -12,7 +12,7 @@ trainer:
   precision: 32
   max_steps: -1
   num_sanity_val_steps: 3
-  gradient_clip_val: 10.0
+  gradient_clip_val: null
   val_check_interval: 1.0
   deterministic: ${train.deterministic}
   accumulate_grad_batches: 1 # 1 if B-32, B-16 and 2 if L-14
