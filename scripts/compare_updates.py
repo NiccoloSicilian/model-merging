@@ -58,7 +58,7 @@ def main():
     parser.add_argument("--openclip_cachedir", default=None, help="OpenCLIP cache directory")
     parser.add_argument("--mass_schedule", default="uniform", choices=["uniform", "linear"])
     parser.add_argument("--model", default="B-16", choices=["B-16", "B-32", "L-14"])
-    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--device", default="cuda")
     args = parser.parse_args()
 
     dual_files = get_step_files(args.dual_dir)
@@ -73,7 +73,7 @@ def main():
     print(f"Loading pretrained encoder ({args.model_name})...", flush=True)
     pretrained_encoder = load_model_from_hf(model_name=args.model_name, openclip_cachedir=args.openclip_cachedir)
     pretrained = {
-        name: param.detach().float()
+        name: param.detach().float().to(args.device)
         for name, param in pretrained_encoder.named_parameters()
         if param.requires_grad
     }
