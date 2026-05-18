@@ -12,6 +12,7 @@ Usage:
 """
 
 import argparse
+import math
 import os
 import re
 
@@ -113,37 +114,44 @@ def main():
             m=module,
         )
 
-        # Compute per-layer Frobenius norm and cosine similarity
+        # Compute per-layer Frobenius norm, cosine similarity, and z-score
         layer_norms = {}
         layer_cosines = {}
+        layer_zscores = {}
         for name in dualized_tau_adamw:
             if name in tau_dual:
                 a = tau_dual[name]
                 b = dualized_tau_adamw[name]
                 diff = a - b
-                layer_norms[name] = torch.norm(diff, p="fro").item()
+                layer_norms[name] = (torch.norm(diff, p="fro") / torch.norm(a, p="fro")).item()
                 cos = torch.nn.functional.cosine_similarity(
                     a.flatten().unsqueeze(0), b.flatten().unsqueeze(0)
                 ).item()
                 layer_cosines[name] = cos
+                d = a.numel()
+                layer_zscores[name] = cos * math.sqrt(d)
 
-        results.append((step_d, layer_norms, layer_cosines))
+        results.append((step_d, layer_norms, layer_cosines, layer_zscores))
         avg_norm = sum(layer_norms.values()) / len(layer_norms)
         avg_cos = sum(layer_cosines.values()) / len(layer_cosines)
-        print(f"  step {step_d}: avg_norm={avg_norm:.6f}, avg_cosine={avg_cos:.6f}", flush=True)
+        avg_z = sum(layer_zscores.values()) / len(layer_zscores)
+        print(f"  step {step_d}: avg_norm={avg_norm:.6f}, avg_cosine={avg_cos:.6f}, avg_zscore={avg_z:.2f}", flush=True)
 
     with open(args.output, "w") as f:
         if results:
             layer_names_sorted = sorted(results[0][1].keys())
             norm_cols = [f"norm_{n}" for n in layer_names_sorted]
             cos_cols = [f"cos_{n}" for n in layer_names_sorted]
-            f.write("step\tavg_norm\tavg_cosine\t" + "\t".join(norm_cols + cos_cols) + "\n")
-            for step, layer_norms, layer_cosines in results:
+            z_cols = [f"zscore_{n}" for n in layer_names_sorted]
+            f.write("step\tavg_norm\tavg_cosine\tavg_zscore\t" + "\t".join(norm_cols + cos_cols + z_cols) + "\n")
+            for step, layer_norms, layer_cosines, layer_zscores in results:
                 avg_n = sum(layer_norms.values()) / len(layer_norms)
                 avg_c = sum(layer_cosines.values()) / len(layer_cosines)
+                avg_z = sum(layer_zscores.values()) / len(layer_zscores)
                 norm_vals = "\t".join(f"{layer_norms[n]:.6f}" for n in layer_names_sorted)
                 cos_vals = "\t".join(f"{layer_cosines[n]:.6f}" for n in layer_names_sorted)
-                f.write(f"{step}\t{avg_n:.6f}\t{avg_c:.6f}\t{norm_vals}\t{cos_vals}\n")
+                z_vals = "\t".join(f"{layer_zscores[n]:.2f}" for n in layer_names_sorted)
+                f.write(f"{step}\t{avg_n:.6f}\t{avg_c:.6f}\t{avg_z:.2f}\t{norm_vals}\t{cos_vals}\t{z_vals}\n")
 
     print(f"\nResults saved to {args.output}", flush=True)
 
