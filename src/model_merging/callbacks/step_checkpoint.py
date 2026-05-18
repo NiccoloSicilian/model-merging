@@ -9,7 +9,7 @@ pylogger = logging.getLogger(__name__)
 
 
 class StepCheckpointCallback(pl.Callback):
-    """Saves the weight update delta (W_before - W_after) at each step in float16.
+    """Saves the full encoder weights after each optimizer step in float16.
 
     Saves every `save_every_n_steps` steps, plus always the first step.
     """
@@ -18,32 +18,19 @@ class StepCheckpointCallback(pl.Callback):
         super().__init__()
         self.save_dir = save_dir
         self.save_every_n_steps = save_every_n_steps
-        self.weights_before = None
         os.makedirs(self.save_dir, exist_ok=True)
 
-    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
         global_step = trainer.global_step
+
         if global_step == 0 or global_step % self.save_every_n_steps == 0:
-            self.weights_before = {
-                name: param.detach().clone()
+            weights = {
+                name: param.detach().to(torch.float16).cpu()
                 for name, param in pl_module.encoder.named_parameters()
                 if param.requires_grad
             }
 
-    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
-        if self.weights_before is None:
-            return
+            save_path = os.path.join(self.save_dir, f"step_{global_step}.pt")
+            torch.save(weights, save_path)
 
-        global_step = trainer.global_step
-
-        # Compute delta = W_before - W_after (the update applied by the optimizer)
-        delta = {}
-        for name, param in pl_module.encoder.named_parameters():
-            if name in self.weights_before:
-                delta[name] = (self.weights_before[name] - param.detach()).to(torch.float16).cpu()
-
-        save_path = os.path.join(self.save_dir, f"step_{global_step}.pt")
-        torch.save(delta, save_path)
-
-        pylogger.info(f"Saved update delta at step {global_step}")
-        self.weights_before = None
+            pylogger.info(f"Saved full weights at step {global_step}")
