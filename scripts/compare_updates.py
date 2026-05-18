@@ -1,8 +1,8 @@
-"""Compare cumulative task vectors between Dual and AdamW finetuning.
+"""Compare task vectors between Dual and AdamW finetuning.
 
-For each step i, accumulates deltas from step 0 to i to form task vectors:
-  - tau_dual_i = sum of dual deltas from step 0..i
-  - tau_adamw_i = sum of adamw deltas from step 0..i
+For each step i, computes task vectors as the difference from pretrained weights:
+  - tau_dual_i = step_i_weights_dual - pretrained
+  - tau_adamw_i = step_i_weights_adamw - pretrained
 Then applies the duality map to tau_adamw_i and compares:
   ||dualize(tau_adamw_i) - tau_dual_i||_F  and  cosine_similarity
 
@@ -18,6 +18,8 @@ import re
 import torch
 
 from model_merging.merging.dual_arithmetic import ViT_B_16, ViT_B_32, ViT_L_14
+from model_merging.utils.io_utils import load_model_from_hf
+from model_merging.utils.utils import compute_task_dict
 
 # Reuse helpers from the classifier
 from model_merging.model.dual_image_classifier import (
@@ -52,6 +54,8 @@ def main():
     parser.add_argument("--dual_dir", required=True, help="Dir with dual finetuning step_*.pt")
     parser.add_argument("--adamw_dir", required=True, help="Dir with adamw finetuning step_*.pt")
     parser.add_argument("--output", required=True, help="Output results file")
+    parser.add_argument("--model_name", required=True, help="Model name for load_model_from_hf (e.g. ViT-B-16)")
+    parser.add_argument("--openclip_cachedir", default=None, help="OpenCLIP cache directory")
     parser.add_argument("--mass_schedule", default="uniform", choices=["uniform", "linear"])
     parser.add_argument("--model", default="B-16", choices=["B-16", "B-32", "L-14"])
     parser.add_argument("--device", default="cpu")
@@ -66,38 +70,38 @@ def main():
         f"Mismatch: {len(dual_files)} dual files vs {len(adamw_files)} adamw files"
     )
 
+    print(f"Loading pretrained encoder ({args.model_name})...", flush=True)
+    pretrained_encoder = load_model_from_hf(model_name=args.model_name, openclip_cachedir=args.openclip_cachedir)
+    pretrained = {
+        name: param.detach().float()
+        for name, param in pretrained_encoder.named_parameters()
+        if param.requires_grad
+    }
+    del pretrained_encoder
+
     print(f"Building duality module for {args.model}...", flush=True)
     module = build_module(args.model, args.mass_schedule)
     print(f"Module built. Atoms: {module.atoms}", flush=True)
     device = args.device
     print(f"Device: {device}", flush=True)
 
-    # Cumulative task vectors
-    tau_dual = None
-    tau_adamw = None
-
     results = []
     for (step_d, dual_path), (step_a, adamw_path) in zip(dual_files, adamw_files):
         assert step_d == step_a, f"Step mismatch: dual={step_d}, adamw={step_a}"
         print(f"Processing step {step_d}...", flush=True)
 
-        dual_delta = torch.load(dual_path, map_location=device)
-        adamw_delta = torch.load(adamw_path, map_location=device)
+        dual_weights = torch.load(dual_path, map_location=device)
+        adamw_weights = torch.load(adamw_path, map_location=device)
 
         # Cast to float32 (checkpoints are float16)
-        dual_delta = {k: v.float() for k, v in dual_delta.items()}
-        adamw_delta = {k: v.float() for k, v in adamw_delta.items()}
+        dual_weights = {k: v.float() for k, v in dual_weights.items()}
+        adamw_weights = {k: v.float() for k, v in adamw_weights.items()}
 
-        # Accumulate into task vectors
-        if tau_dual is None:
-            tau_dual = {k: v.clone() for k, v in dual_delta.items()}
-            tau_adamw = {k: v.clone() for k, v in adamw_delta.items()}
-        else:
-            for k in tau_dual:
-                tau_dual[k] += dual_delta[k]
-                tau_adamw[k] += adamw_delta[k]
+        # Compute task vectors: step_i_weights - pretrained
+        tau_dual = compute_task_dict(pretrained, dual_weights)
+        tau_adamw = compute_task_dict(pretrained, adamw_weights)
 
-        # Apply duality map to cumulative adamw task vector
+        # Apply duality map to adamw task vector
         layer_names = get_vit_topological_order(list(tau_adamw.keys()))
 
         dualized_tau_adamw = build_duality_map_with_module(
