@@ -93,6 +93,7 @@ def run(cfg: DictConfig):
     trainer.fit(
         model=model,
         train_dataloaders=dataset.train_loader,
+        val_dataloaders=dataset.val_loader,
     )
 
     pylogger.info("Starting testing!")

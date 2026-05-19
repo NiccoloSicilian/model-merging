@@ -1,6 +1,6 @@
 import numpy as np
 from typing import Optional, Sequence, Dict, Union, Callable
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, Subset
 from datasets import (
     Dataset as HFDataset,
     DatasetDict,
@@ -91,6 +91,7 @@ class HFImageClassification:
         ] = None,
         classnames_override: Optional[Sequence[str]] = None,
         pin_memory: bool = True,
+        val_fraction: float = 0.1,
     ):
 
         if split_map is None:
@@ -107,17 +108,34 @@ class HFImageClassification:
                 train_key in hf_ds and test_key in hf_ds
             ), f"split_map points to missing splits: got {list(hf_ds.keys())}"
 
-        self.train_dataset = _HFImageTorchDataset(
+        full_train_dataset = _HFImageTorchDataset(
             hf_ds[train_key], transform=preprocess, label_map=label_map
         )
         self.test_dataset = _HFImageTorchDataset(
             hf_ds[test_key], transform=preprocess, label_map=label_map
         )
 
+        # Split training set into train and val subsets
+        n = len(full_train_dataset)
+        n_val = max(1, int(n * val_fraction))
+        indices = np.random.permutation(n).tolist()
+        val_indices = indices[:n_val]
+        train_indices = indices[n_val:]
+
+        self.train_dataset = Subset(full_train_dataset, train_indices)
+        self.val_dataset = Subset(full_train_dataset, val_indices)
+
         self.train_loader = DataLoader(
             self.train_dataset,
             batch_size=batch_size,
             shuffle=True,
+            num_workers=num_workers,
+            pin_memory=pin_memory,
+        )
+        self.val_loader = DataLoader(
+            self.val_dataset,
+            batch_size=batch_size,
+            shuffle=False,
             num_workers=num_workers,
             pin_memory=pin_memory,
         )
