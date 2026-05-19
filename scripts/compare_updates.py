@@ -1,10 +1,8 @@
-"""Compare task vectors between Dual and AdamW finetuning.
+"""Compare the last dualized AdamW task vector against all Dual task vectors.
 
-For each step i, computes task vectors as the difference from pretrained weights:
-  - tau_dual_i = step_i_weights_dual - pretrained
-  - tau_adamw_i = step_i_weights_adamw - pretrained
-Then applies the duality map to tau_adamw_i and compares:
-  ||dualize(tau_adamw_i) - tau_dual_i||_F  and  cosine_similarity
+Computes the duality map of tau_adamw only for the last AdamW checkpoint,
+then compares that single dualized_tau_adamw against tau_dual_i for every step i:
+  ||dualized_tau_adamw_last - tau_dual_i||_F  and  cosine_similarity
 
 Usage:
     python scripts/compare_updates.py --dual_dir /path/to/dual --adamw_dir /path/to/adamw --output results.tsv
@@ -85,13 +83,12 @@ def main():
 
     print(f"Found {len(dual_files)} dual files, {len(adamw_files)} adamw files", flush=True)
 
-    assert len(dual_files) == len(adamw_files), (
-        f"Mismatch: {len(dual_files)} dual files vs {len(adamw_files)} adamw files"
-    )
-
-    # Process from last step first
+    # Process dual files from last step first
     dual_files = list(reversed(dual_files))
-    adamw_files = list(reversed(adamw_files))
+
+    # Use only the last adamw checkpoint
+    last_adamw_step, last_adamw_path = adamw_files[-1]
+    print(f"Using last AdamW checkpoint: step {last_adamw_step}", flush=True)
 
     print(f"Loading pretrained encoder ({args.model_name})...", flush=True)
     pretrained_encoder = load_model_from_hf(model_name=args.model_name, openclip_cachedir=args.openclip_cachedir)
@@ -108,38 +105,39 @@ def main():
     device = args.device
     print(f"Device: {device}", flush=True)
 
+    # Compute dualized_tau_adamw once from the last AdamW checkpoint
+    print(f"Computing dualized tau_adamw from step {last_adamw_step}...", flush=True)
+    adamw_weights = torch.load(last_adamw_path, map_location=device)
+    adamw_weights = {k: v.float() for k, v in adamw_weights.items()}
+    tau_adamw = compute_task_dict(pretrained, adamw_weights)
+
+    if args.compress_ratio is not None:
+        print(f"  Applying low-rank approximation (compress_ratio={args.compress_ratio})", flush=True)
+        tau_adamw = low_rank_approx(tau_adamw, args.compress_ratio)
+
+    layer_names = get_vit_topological_order(list(tau_adamw.keys()))
+    dualized_tau_adamw = build_duality_map_with_module(
+        layer_names=layer_names,
+        grads=tau_adamw,
+        device=device,
+        mass_schedule=args.mass_schedule,
+        model_name=args.model,
+        m=module,
+    )
+    del adamw_weights, tau_adamw
+
+    # Compare dualized_tau_adamw (last step) against each tau_dual
     results = []
-    for (step_d, dual_path), (step_a, adamw_path) in zip(dual_files, adamw_files):
-        assert step_d == step_a, f"Step mismatch: dual={step_d}, adamw={step_a}"
-        print(f"Processing step {step_d}...", flush=True)
+    for step_d, dual_path in dual_files:
+        print(f"Processing dual step {step_d}...", flush=True)
 
         dual_weights = torch.load(dual_path, map_location=device)
-        adamw_weights = torch.load(adamw_path, map_location=device)
-
-        # Cast to float32 (checkpoints are float16)
         dual_weights = {k: v.float() for k, v in dual_weights.items()}
-        adamw_weights = {k: v.float() for k, v in adamw_weights.items()}
-
-        # Compute task vectors: step_i_weights - pretrained
         tau_dual = compute_task_dict(pretrained, dual_weights)
-        tau_adamw = compute_task_dict(pretrained, adamw_weights)
 
         if args.compress_ratio is not None:
             print(f"  Applying low-rank approximation (compress_ratio={args.compress_ratio})", flush=True)
-            tau_adamw = low_rank_approx(tau_adamw, args.compress_ratio)
             tau_dual = low_rank_approx(tau_dual, args.compress_ratio)
-
-        # Apply duality map to adamw task vector
-        layer_names = get_vit_topological_order(list(tau_adamw.keys()))
-
-        dualized_tau_adamw = build_duality_map_with_module(
-            layer_names=layer_names,
-            grads=tau_adamw,
-            device=device,
-            mass_schedule=args.mass_schedule,
-            model_name=args.model,
-            m=module,
-        )
 
         # Compute per-layer Frobenius norm, cosine similarity, and z-score
         layer_norms = {}
