@@ -19,6 +19,7 @@ from nn_core.common.utils import seed_index_everything
 from nn_core.model_logging import NNLogger
 from nn_core.serialization import NNCheckpointIO
 
+from model_merging.callbacks.step_checkpoint import StepCheckpointCallback
 from model_merging.model.encoder import ImageEncoder
 from model_merging.model.heads import get_classification_head
 from model_merging.model.image_classifier import ImageClassifier
@@ -74,6 +75,8 @@ def run(cfg: DictConfig):
     model.freeze_head()
 
     callbacks = [hydra.utils.instantiate(cb) for cb in cfg.train.callbacks]
+    if not cfg.train.get("save_steps", True):
+        callbacks = [cb for cb in callbacks if not isinstance(cb, StepCheckpointCallback)]
 
     pylogger.info("Instantiating the <Trainer>")
     trainer = pl.Trainer(
@@ -92,6 +95,17 @@ def run(cfg: DictConfig):
 
     pylogger.info("Starting testing!")
     trainer.test(model=model, dataloaders=dataset.test_loader)
+
+    # Save full encoder weights (all parameters including biases, layer norms, etc.)
+    save_dir = cfg.train.gradient_save_dir
+    os.makedirs(save_dir, exist_ok=True)
+    encoder_state = {
+        name: param.detach().cpu()
+        for name, param in model.encoder.named_parameters()
+    }
+    save_path = os.path.join(save_dir, "encoder_final.pt")
+    torch.save(encoder_state, save_path)
+    pylogger.info(f"Saved full encoder weights ({len(encoder_state)} params) to {save_path}")
 
     upload_model_to_hf(model.encoder, cfg.nn.encoder.model_name, cfg.dataset.name)
 
