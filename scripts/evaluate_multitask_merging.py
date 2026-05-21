@@ -116,9 +116,7 @@ def run(cfg: DictConfig) -> str:
         if finetuned_model_paths and dataset.name in finetuned_model_paths:
             local_path = finetuned_model_paths[dataset.name]
             pylogger.info(f"Loading {dataset.name} from local path: {local_path}")
-            finetuned_models[dataset] = load_model_from_local(
-                model_name=cfg.nn.encoder.model_name, checkpoint_path=local_path
-            ).state_dict()
+            finetuned_models[dataset] = torch.load(local_path, map_location="cpu")
         else:
             pylogger.info(f"Loading {dataset.name} from HuggingFace")
             finetuned_models[dataset] = load_model_from_hf(
