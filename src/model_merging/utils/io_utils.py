@@ -91,6 +91,14 @@ def load_model_from_hf(model_name, dataset_name="base", openclip_cachedir=None) 
     return model
 
 
+def load_model_from_local(model_name, checkpoint_path, openclip_cachedir=None) -> ImageEncoder:
+    """Load a finetuned model from a local checkpoint path."""
+    state_dict = torch.load(checkpoint_path, map_location="cpu")
+    model = ImageEncoder(model_name, openclip_cachedir=openclip_cachedir)
+    model.load_state_dict(state_dict)
+    return model
+
+
 def upload_model_to_hf(model, model_name, dataset_name):
     """ """
 

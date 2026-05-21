@@ -34,6 +34,7 @@ from model_merging.model.heads import (
 from model_merging.utils.io_utils import (
     boilerplate,
     load_model_from_hf,
+    load_model_from_local,
 )
 from model_merging.utils.plots import plot_interactive_radar_chart
 from model_merging.utils.utils import (
@@ -107,12 +108,21 @@ def run(cfg: DictConfig) -> str:
         model_name=cfg.nn.encoder.model_name
     )
 
-    finetuned_models = {
-        dataset: load_model_from_hf(
-            model_name=cfg.nn.encoder.model_name, dataset_name=dataset.name
-        ).state_dict()
-        for dataset in cfg.benchmark.datasets
-    }
+    finetuned_model_paths = OmegaConf.to_container(cfg.get("finetuned_model_paths", {}), resolve=True)
+
+    finetuned_models = {}
+    for dataset in cfg.benchmark.datasets:
+        if finetuned_model_paths and dataset.name in finetuned_model_paths:
+            local_path = finetuned_model_paths[dataset.name]
+            pylogger.info(f"Loading {dataset.name} from local path: {local_path}")
+            finetuned_models[dataset] = load_model_from_local(
+                model_name=cfg.nn.encoder.model_name, checkpoint_path=local_path
+            ).state_dict()
+        else:
+            pylogger.info(f"Loading {dataset.name} from HuggingFace")
+            finetuned_models[dataset] = load_model_from_hf(
+                model_name=cfg.nn.encoder.model_name, dataset_name=dataset.name
+            ).state_dict()
 
     pylogger.info(f"Number of tasks: {cfg.num_tasks}")
     pylogger.info(f"Finetuned models: {list(finetuned_models.keys())}")

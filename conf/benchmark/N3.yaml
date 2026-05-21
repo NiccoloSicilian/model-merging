@@ -1,0 +1,4 @@
+datasets:
+  - ${dataset:"DTD"}
+  - ${dataset:"EuroSAT"}
+  - ${dataset:"MNIST"}
