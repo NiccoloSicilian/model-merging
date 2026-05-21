@@ -105,7 +105,8 @@ def run(cfg: DictConfig) -> str:
 
     # only has vision encoder, no text transformer
     zeroshot_encoder: ImageEncoder = load_model_from_hf(
-        model_name=cfg.nn.encoder.model_name
+        model_name=cfg.nn.encoder.model_name,
+        openclip_cachedir=cfg.misc.openclip_cachedir,
     )
 
     finetuned_model_paths = OmegaConf.to_container(cfg.get("finetuned_model_paths", {}), resolve=True)
