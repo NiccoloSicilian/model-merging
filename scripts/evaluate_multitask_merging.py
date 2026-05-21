@@ -98,11 +98,6 @@ def run(cfg: DictConfig) -> str:
     cfg.num_tasks = num_tasks  # Now we can safely update it
     omegaconf.OmegaConf.set_struct(cfg, True)  # Re-enable struct mode
 
-    # upperbound accuracies, used for logging the normalized accuracy
-    finetuned_accuracies: Dict[str, float] = get_finetuning_accuracies(
-        cfg.misc.finetuned_accuracy_path
-    )[cfg.nn.encoder.model_name]
-
     # only has vision encoder, no text transformer
     zeroshot_encoder: ImageEncoder = load_model_from_hf(
         model_name=cfg.nn.encoder.model_name,
@@ -125,6 +120,50 @@ def run(cfg: DictConfig) -> str:
 
     pylogger.info(f"Number of tasks: {cfg.num_tasks}")
     pylogger.info(f"Finetuned models: {list(finetuned_models.keys())}")
+
+    # Evaluate each finetuned model on its test set to get upper-bound accuracies
+    finetuned_accuracies: Dict[str, float] = {}
+    pylogger.info("Evaluating finetuned models to compute upper-bound accuracies...")
+    for dataset_cfg in cfg.benchmark.datasets:
+        ft_encoder = copy.deepcopy(zeroshot_encoder)
+        ft_encoder.load_state_dict(finetuned_models[dataset_cfg])
+
+        dataset = instantiate(
+            dataset_cfg, preprocess_fn=zeroshot_encoder.val_preprocess
+        )
+        classification_head = get_classification_head(
+            cfg.nn.encoder.model_name,
+            dataset_cfg.name,
+            ckpt_path=cfg.misc.ckpt_path,
+            openclip_cachedir=cfg.misc.openclip_cachedir,
+            device=cfg.device,
+        )
+        ft_model = ImageClassifier(
+            encoder=ft_encoder,
+            classifier=classification_head,
+            x_key=cfg.conventions.x_key,
+            y_key=cfg.conventions.y_key,
+        )
+        ft_model.set_metrics(len(dataset.classnames))
+        ft_model.set_task(dataset_cfg.name)
+        ft_model.set_finetuning_accuracy(None)
+
+        ft_trainer = pl.Trainer(
+            default_root_dir=cfg.core.storage_dir,
+            logger=False,
+            enable_checkpointing=False,
+            **cfg.train.trainer,
+        )
+        ft_results = ft_trainer.test(model=ft_model, dataloaders=dataset.test_loader)
+        ft_acc = ft_results[0][f"acc/test/{dataset_cfg.name}"]
+        finetuned_accuracies[dataset_cfg.name] = ft_acc
+        pylogger.info(f"  {dataset_cfg.name} finetuned accuracy: {ft_acc:.4f}")
+
+        del ft_encoder, ft_model, ft_trainer
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+    pylogger.info(f"Finetuned accuracies: {finetuned_accuracies}")
 
     merger = instantiate(cfg.merger)
     merged_encoder = merger.merge(zeroshot_encoder, finetuned_models)
@@ -157,9 +196,7 @@ def run(cfg: DictConfig) -> str:
         model.set_metrics(len(dataset.classnames))
         model.set_task(dataset_cfg.name)
         model.set_finetuning_accuracy(
-            finetuned_accuracies[
-                dataset_cfg.name + "Val" if cfg.eval_on_train else dataset_cfg.name
-            ]
+            finetuned_accuracies[dataset_cfg.name]
         )
         callbacks: List[Callback] = build_callbacks(cfg.train.callbacks, template_core)
 
