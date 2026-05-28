@@ -19,4 +19,4 @@ optimizer:
 
 lr_scheduler:
   _target_: torch.optim.lr_scheduler.CosineAnnealingLR
-  T_max: 10
+  T_max: ${train.trainer.max_epochs}
