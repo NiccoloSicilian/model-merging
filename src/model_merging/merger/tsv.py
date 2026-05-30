@@ -32,12 +32,13 @@ pylogger = logging.getLogger(__name__)
 
 class TaskSingularVectorsMerger(TaskVectorBasedMerger):
 
-    def __init__(self, svd_path, svd_compress_factor, non_matrix_params_aggregation):
+    def __init__(self, svd_path, svd_compress_factor, non_matrix_params_aggregation, optimal_alpha=0.8):
         super().__init__()
 
         self.svd_path = svd_path
         self.svd_compress_factor = svd_compress_factor
         self.non_matrix_params_aggregation = non_matrix_params_aggregation
+        self.optimal_alpha = optimal_alpha
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"🚀 DualMerger initialized on device: {self.device}")
     
@@ -68,12 +69,10 @@ class TaskSingularVectorsMerger(TaskVectorBasedMerger):
         
         #save_module_vec_fast(multi_task_vector,"matrixesTSV_"+"ViTB16"+"task"+str(len(datasets))+".txt", path="/leonardo/home/userexternal/nsicilia/DualMerging")
         merged_encoder: ImageEncoder = copy.deepcopy(base_model)
-        coefficient = 0.8
-        print("USING:",coefficient)
         merged_encoder = apply_dict_to_model(
             multi_task_vector,
             merged_encoder,
-            coefficient=coefficient
+            coefficient=self.optimal_alpha
         )
 
         return merged_encoder
